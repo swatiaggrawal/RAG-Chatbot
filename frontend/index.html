@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Knowledge Copilot</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<style>
+  :root {
+    --bg: #1C2333;
+    --bg-panel: #232B40;
+    --accent-sage: #7C9885;
+    --accent-gold: #C9A66B;
+    --text: #E8E6E1;
+    --text-dim: #9BA3B7;
+    --border: #33405C;
+    --user-bubble: #2C3650;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  #root {
+    max-width: 760px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 36px 24px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  header h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 28px;
+    margin: 0 0 6px;
+    letter-spacing: -0.02em;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin: 0;
+  }
+
+  .chat-area {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .empty-state {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin: auto;
+    text-align: center;
+    max-width: 320px;
+    line-height: 1.6;
+  }
+
+  .message-row {
+    display: flex;
+    flex-direction: column;
+    max-width: 85%;
+  }
+
+  .message-row.user {
+    align-self: flex-end;
+    align-items: flex-end;
+  }
+
+  .message-row.assistant {
+    align-self: flex-start;
+    align-items: flex-start;
+  }
+
+  .bubble {
+    padding: 14px 16px;
+    border-radius: 4px;
+    line-height: 1.55;
+    font-size: 15px;
+    white-space: pre-wrap;
+  }
+
+  .user .bubble {
+    background: var(--user-bubble);
+    border: 1px solid var(--border);
+  }
+
+  .assistant .bubble {
+    background: var(--bg-panel);
+    border-left: 2px solid var(--accent-sage);
+  }
+
+  .sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .source-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent-gold);
+    border: 1px solid var(--accent-gold);
+    border-radius: 3px;
+    padding: 3px 7px;
+    opacity: 0.85;
+  }
+
+  .thinking {
+    color: var(--text-dim);
+    font-size: 14px;
+    font-style: italic;
+  }
+
+  .input-area {
+    padding: 20px 24px 28px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+  }
+
+  .input-area input {
+    flex: 1;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+  }
+
+  .input-area input:focus {
+    outline: 2px solid var(--accent-sage);
+    outline-offset: 1px;
+  }
+
+  .input-area button {
+    background: var(--accent-sage);
+    border: none;
+    border-radius: 4px;
+    padding: 0 20px;
+    color: #14171f;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .input-area button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .input-area button:focus-visible {
+    outline: 2px solid var(--accent-gold);
+    outline-offset: 2px;
+  }
+
+  .error-banner {
+    background: #3A2530;
+    border: 1px solid #8a4a5a;
+    color: #E8B4C0;
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    margin: 0 24px;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+// Change this if your API runs somewhere other than localhost:8000
+// (e.g. update to your deployed Render/HF Spaces URL once deployed)
+const API_URL = "http://localhost:8000";
+
+function App() {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  async function sendQuestion() {
+    const question = input.trim();
+    if (!question || loading) return;
+
+    setError(null);
+    setMessages(prev => [...prev, { role: "user", text: question }]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server responded with ${res.status}`);
+      }
+
+      const data = await res.json();
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        text: data.answer,
+        sources: data.sources,
+      }]);
+    } catch (err) {
+      setError(
+        "Couldn't reach the chatbot API. Is it running at " + API_URL + "?"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendQuestion();
+    }
+  }
+
+  return (
+    <React.Fragment>
+      <header>
+        <h1>Knowledge Copilot</h1>
+        <p>Grounded answers from your own documents, with sources cited.</p>
+      </header>
+
+      <div className="chat-area">
+        {messages.length === 0 && (
+          <div className="empty-state">
+            Ask a question about the documents you've indexed.
+            Every answer is grounded in retrieved source text — no source, no answer.
+          </div>
+        )}
+
+        {messages.map((m, i) => (
+          <div key={i} className={`message-row ${m.role}`}>
+            <div className="bubble">{m.text}</div>
+            {m.role === "assistant" && m.sources && m.sources.length > 0 && (
+              <div className="sources">
+                {m.sources.map((s, j) => (
+                  <span key={j} className="source-tag">{s}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {loading && <div className="thinking">Retrieving and generating...</div>}
+        <div ref={chatEndRef} />
+      </div>
+
+      {error && <div className="error-banner">{error}</div>}
+
+      <div className="input-area">
+        <input
+          type="text"
+          placeholder="Ask something..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={loading}
+        />
+        <button onClick={sendQuestion} disabled={loading || !input.trim()}>
+          Send
+        </button>
+      </div>
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
