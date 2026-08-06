@@ -6,14 +6,10 @@ venv/
 __pycache__/
 *.pyc
 
-# Your personal documents - these are your own notes/PDFs, not meant
-# to be public. Keep the folder structure but not the actual files.
-data/*
-!data/.gitkeep
-
-# Chroma's local vector database - this is generated from data/, not
-# source code, and can be large. Anyone cloning the repo regenerates
-# it by running ingest.py + embed_store.py on their own documents.
+# data/ is now committed - it holds public, MIT-licensed FastAPI
+# documentation (from github.com/tiangolo/fastapi), safe to redistribute.
+# storage/ (the generated vector index) still stays out of git - the
+# app rebuilds it automatically from data/ on first startup (see api.py).
 storage/*
 !storage/.gitkeep
 

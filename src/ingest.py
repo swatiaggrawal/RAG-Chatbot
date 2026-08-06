@@ -53,7 +53,7 @@ def load_documents() -> list[dict]:
     documents = []
 
     for file_path in DATA_DIR.glob("*"):
-        if file_path.suffix == ".txt":
+        if file_path.suffix in (".txt", ".md"):
             text = file_path.read_text(encoding="utf-8")
             documents.append({"source": file_path.name, "text": normalize_text(text)})
 

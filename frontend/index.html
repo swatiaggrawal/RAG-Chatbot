@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Knowledge Copilot</title>
+<title>FastAPI Docs Copilot</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -200,7 +200,7 @@ const { useState, useRef, useEffect } = React;
 
 // Change this if your API runs somewhere other than localhost:8000
 // (e.g. update to your deployed Render/HF Spaces URL once deployed)
-const API_URL = "https://rag-chatbot-s2r2.onrender.com";
+const API_URL = "http://localhost:8000";
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -258,14 +258,15 @@ function App() {
   return (
     <React.Fragment>
       <header>
-        <h1>Knowledge Copilot</h1>
-        <p>Grounded answers from your own documents, with sources cited.</p>
+        <h1>FastAPI Docs Copilot</h1>
+        <p>Grounded answers from FastAPI's official documentation, with sources cited.</p>
       </header>
 
       <div className="chat-area">
         {messages.length === 0 && (
           <div className="empty-state">
-            Ask a question about the documents you've indexed.
+            Ask a question about FastAPI — request bodies, dependencies,
+            middleware, background tasks, anything in the docs.
             Every answer is grounded in retrieved source text — no source, no answer.
           </div>
         )}
