@@ -2,8 +2,8 @@
 STAGE 3: RETRIEVE
 -------------------
 Job: given a user's question, embed it with the SAME embedding model
-used for the chunks (Gemini's embedding API), then ask Chroma for the
-most similar chunks.
+used for the chunks (Gemini's embedding API), then ask Pinecone for
+the most similar stored vectors.
 
 This file is deliberately runnable on its own (see __main__ below) so
 you can sanity-check retrieval quality WITHOUT involving the LLM at
@@ -16,7 +16,7 @@ the LLM literally never sees the right information.
 import sys
 from google.genai import types
 
-from embed_store import get_chroma_collection, client, EMBEDDING_MODEL, EMBEDDING_DIM
+from embed_store import genai_client, get_index, EMBEDDING_MODEL, EMBEDDING_DIM
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -29,7 +29,7 @@ def embed_query(query: str) -> list[float]:
     embeddings are asymmetric, so matching this to embed_store.py's
     task_type is what makes retrieval actually work well.
     """
-    response = client.models.embed_content(
+    response = genai_client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=[query],
         config=types.EmbedContentConfig(
@@ -44,26 +44,26 @@ def retrieve(query: str, top_k: int = 4) -> list[dict]:
     """
     Returns the top_k most relevant chunks for a given query, each as
     {"text": ..., "source": ..., "distance": ...}.
-    Lower distance = more similar (Chroma default is cosine distance).
+    Pinecone returns a similarity SCORE (higher = more similar) with
+    cosine metric; we convert to a "distance" (lower = more similar)
+    so the printed output stays consistent with how this project has
+    reported retrieval quality throughout.
     """
     query_embedding = embed_query(query)
 
-    collection = get_chroma_collection()
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=top_k,
+    index = get_index()
+    results = index.query(
+        vector=query_embedding,
+        top_k=top_k,
+        include_metadata=True,
     )
 
     retrieved = []
-    for text, metadata, distance in zip(
-        results["documents"][0],
-        results["metadatas"][0],
-        results["distances"][0],
-    ):
+    for match in results.matches:
         retrieved.append({
-            "text": text,
-            "source": metadata["source"],
-            "distance": distance,
+            "text": match.metadata["text"],
+            "source": match.metadata["source"],
+            "distance": 1 - match.score,
         })
 
     return retrieved

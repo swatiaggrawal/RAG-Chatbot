@@ -1,7 +1,4 @@
-numpy==1.26.4
-onnxruntime==1.17.3
-chroma-hnswlib==0.7.3
-chromadb==0.5.5
+pinecone==6.0.2
 google-genai==1.15.0
 python-dotenv==1.0.1
 pypdf==4.3.1

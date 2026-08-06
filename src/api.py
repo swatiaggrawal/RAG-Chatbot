@@ -18,21 +18,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from generate import answer_question
-from embed_store import get_chroma_collection, embed_and_store
+from embed_store import get_index, embed_and_store
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: check if the vector database already has documents indexed.
-    # This matters for deployment - a fresh Render instance has no
-    # storage/ data (it's gitignored), so without this check every
-    # /chat request would fail with "no documents indexed."
-    collection = get_chroma_collection()
-    if collection.count() == 0:
+    # Startup: check if the Pinecone index already has vectors stored.
+    # This matters for deployment - a fresh backend instance has no
+    # local database (Pinecone is external/persistent), but on a
+    # brand new index there's nothing indexed yet, so this builds it
+    # automatically on first boot.
+    index = get_index()
+    stats = index.describe_index_stats()
+    vector_count = stats.get("total_vector_count", 0)
+
+    if vector_count == 0:
         print("No indexed documents found - running ingest + embed on startup...")
         embed_and_store()
     else:
-        print(f"Found {collection.count()} already-indexed chunks - skipping re-index.")
+        print(f"Found {vector_count} already-indexed chunks - skipping re-index.")
     yield
     # (nothing needed on shutdown)
 
