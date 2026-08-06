@@ -13,7 +13,7 @@ React frontend.
 > pipeline works for internal docs, support knowledge bases, or
 > contract Q&A.
 
-**[Live demo →](#)** *(add your deployed link here once live)*
+**[Live demo →](#)** *[https://rag-chatbot-new.onrender.com](https://rag-chatbot-new.onrender.com)*
 
 ## Why this project
 
