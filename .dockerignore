@@ -1,0 +1,12 @@
+.env
+.venv/
+venv/
+.git/
+.github/
+.claude/
+__pycache__/
+*.pyc
+frontend/
+tests/
+evals/
+storage/

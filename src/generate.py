@@ -23,6 +23,7 @@ import re
 import sys
 import time
 
+from guardrails import BLOCKED_ANSWER, INJECTION_THRESHOLD, injection_score
 from ingest import strip_anchors
 from llm import FAST_MODEL, complete, stream
 from retrieve import retrieve
@@ -84,7 +85,7 @@ def clean_history(history: list[dict] | None) -> list[dict]:
     return messages[-MAX_HISTORY_MESSAGES:]
 
 
-def rewrite_query(question: str, history: list[dict]) -> str:
+def rewrite_query(question: str, history: list[dict], trace: dict | None = None) -> str:
     """
     Turns a follow-up into a standalone search query. Skipped (no LLM
     call) when there's no history; falls back to the raw question if
@@ -106,12 +107,14 @@ def rewrite_query(question: str, history: list[dict]) -> str:
             model=FAST_MODEL,
             max_tokens=512,
             temperature=0,
+            purpose="rewrite",
+            trace=trace,
         )
     except Exception as e:
         print(f"[rewrite] failed, searching with the raw question: {e}")
         return question
 
-    rewritten = rewritten.strip().strip('"').splitlines()[0][:300] if rewritten.strip() else ""
+    rewritten = rewritten.strip().splitlines()[0].strip().strip('"')[:300] if rewritten.strip() else ""
     if len(_rewrite_cache) > 256:
         _rewrite_cache.clear()
     _rewrite_cache[key] = rewritten or question
@@ -148,15 +151,24 @@ def cited_ids(answer: str, n_sources: int) -> list[int]:
     return sorted({int(n) for n in CITATION_RE.findall(answer) if 1 <= int(n) <= n_sources})
 
 
-def prepare(question: str, history: list[dict] | None = None, top_k: int = TOP_K) -> dict:
+def prepare(
+    question: str,
+    history: list[dict] | None = None,
+    top_k: int = TOP_K,
+    trace: dict | None = None,
+) -> dict:
     """
-    Everything before generation: small-talk check, query rewriting and
-    retrieval. Returns the LLM messages plus metadata for the client.
+    Everything before generation: small-talk check, injection guard,
+    query rewriting and retrieval. Returns the LLM messages (or a canned
+    answer) plus metadata for the client. `trace` collects what happened,
+    for monitoring.
     """
     history = clean_history(history)
+    trace = trace if trace is not None else {}
     timings: dict[str, int] = {}
 
     if SMALL_TALK_RE.match(question):
+        trace["kind"] = "smalltalk"
         return {
             "messages": [{"role": "system", "content": SMALL_TALK_PROMPT}, *history,
                          {"role": "user", "content": question}],
@@ -166,11 +178,20 @@ def prepare(question: str, history: list[dict] | None = None, top_k: int = TOP_K
         }
 
     started = time.perf_counter()
-    search_query = rewrite_query(question, history)
+    score = injection_score(question)
+    timings["guard_ms"] = round((time.perf_counter() - started) * 1000)
+    trace["injection_score"] = score
+    if score is not None and score >= INJECTION_THRESHOLD:
+        trace["kind"] = "blocked"
+        return {"canned_answer": BLOCKED_ANSWER, "chunks": [], "search_query": "", "timings": timings}
+
+    trace["kind"] = "rag"
+    started = time.perf_counter()
+    search_query = rewrite_query(question, history, trace)
     if history:
         timings["rewrite_ms"] = round((time.perf_counter() - started) * 1000)
 
-    chunks = retrieve(search_query, top_k=top_k, timings=timings)
+    chunks = retrieve(search_query, top_k=top_k, timings=timings, trace=trace)
     return {
         "messages": [{"role": "system", "content": SYSTEM_PROMPT}, *history,
                      {"role": "user", "content": build_prompt(question, chunks)}],
@@ -180,16 +201,24 @@ def prepare(question: str, history: list[dict] | None = None, top_k: int = TOP_K
     }
 
 
-def answer_question(question: str, history: list[dict] | None = None, top_k: int = TOP_K) -> dict:
+def answer_question(
+    question: str,
+    history: list[dict] | None = None,
+    top_k: int = TOP_K,
+    trace: dict | None = None,
+) -> dict:
     """
     Full RAG call, non-streaming. Returns the answer, the numbered
     source cards, which of them were cited, the query actually searched,
     per-stage timings, and the raw chunks (used by the eval harness).
     """
-    prep = prepare(question, history, top_k)
-    started = time.perf_counter()
-    answer = normalize_citations(complete(prep["messages"]))
-    prep["timings"]["generate_ms"] = round((time.perf_counter() - started) * 1000)
+    prep = prepare(question, history, top_k, trace)
+    if "canned_answer" in prep:
+        answer = prep["canned_answer"]
+    else:
+        started = time.perf_counter()
+        answer = normalize_citations(complete(prep["messages"], trace=trace))
+        prep["timings"]["generate_ms"] = round((time.perf_counter() - started) * 1000)
 
     return {
         "answer": answer,
@@ -201,7 +230,12 @@ def answer_question(question: str, history: list[dict] | None = None, top_k: int
     }
 
 
-def stream_answer(question: str, history: list[dict] | None = None, top_k: int = TOP_K):
+def stream_answer(
+    question: str,
+    history: list[dict] | None = None,
+    top_k: int = TOP_K,
+    trace: dict | None = None,
+):
     """
     Streaming RAG call. Yields (event, data) pairs:
       ("meta",  sources + search query + retrieval timings) - before any text,
@@ -209,17 +243,22 @@ def stream_answer(question: str, history: list[dict] | None = None, top_k: int =
       ("token", {"t": text}) - many times
       ("done",  cited source ids + full timings)
     """
-    prep = prepare(question, history, top_k)
+    prep = prepare(question, history, top_k, trace)
     yield "meta", {
         "sources": source_cards(prep["chunks"]),
         "search_query": prep["search_query"],
         "timings": prep["timings"],
     }
 
+    if "canned_answer" in prep:
+        yield "token", {"t": prep["canned_answer"]}
+        yield "done", {"cited": [], "timings": prep["timings"]}
+        return
+
     started = time.perf_counter()
     first_token_ms = None
     parts = []
-    for text in stream(prep["messages"]):
+    for text in stream(prep["messages"], trace=trace):
         if first_token_ms is None:
             first_token_ms = round((time.perf_counter() - started) * 1000)
         parts.append(text)

@@ -481,6 +481,18 @@
     animation: fade-up 0.25s ease both;
   }
 
+  .votes { display: inline-flex; gap: 2px; }
+  .vote-btn {
+    font-size: 13px; line-height: 1;
+    background: none; border: 1px solid transparent; border-radius: 6px;
+    padding: 3px 6px; cursor: pointer; opacity: 0.6;
+    transition: opacity 0.2s, border-color 0.2s, transform 0.15s;
+  }
+  .vote-btn:hover, .vote-btn:focus-visible { opacity: 1; border-color: var(--border); outline: none; transform: scale(1.1); }
+  .vote-thanks { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); animation: fade-up 0.3s ease both; }
+  .hint a { color: var(--cyan); text-decoration: none; }
+  .hint a:hover, .hint a:focus-visible { text-decoration: underline; }
+
   .timings { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); opacity: 0.8; margin-right: 4px; }
 
   .new-chat {
@@ -642,6 +654,17 @@ function SourceCard({ source, open, onToggle }) {
 function AssistantMessage({ msg }) {
   const [openSource, setOpenSource] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [vote, setVote] = useState(null);
+
+  function sendFeedback(rating) {
+    if (vote || !msg.requestId) return;
+    setVote(rating);
+    fetch(`${API_URL}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ request_id: msg.requestId, rating }),
+    }).catch(() => {});
+  }
 
   // Show the sources the answer actually cited; if it cited none (e.g. a
   // refusal), fall back to everything that was retrieved.
@@ -687,6 +710,12 @@ function AssistantMessage({ msg }) {
             <div className="meta">
               {timings && <span className="timings">{timings}</span>}
               <button className="copy-btn" onClick={copy}>{copied ? "copied ✓" : "copy"}</button>
+              {msg.requestId && (vote
+                ? <span className="vote-thanks">thanks for the feedback!</span>
+                : <span className="votes">
+                    <button className="vote-btn" onClick={() => sendFeedback("up")} aria-label="Helpful answer">👍</button>
+                    <button className="vote-btn" onClick={() => sendFeedback("down")} aria-label="Unhelpful answer">👎</button>
+                  </span>)}
             </div>
           </React.Fragment>
         )}
@@ -778,6 +807,10 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, history }),
       });
+      if (res.status === 429) {
+        const body = await res.json().catch(() => ({}));
+        throw Object.assign(new Error("rate limited"), { userMessage: body.detail });
+      }
       if (!res.ok || !res.body) throw new Error(`Server responded with ${res.status}`);
 
       for await (const { event, data } of readEvents(res)) {
@@ -793,6 +826,7 @@ function App() {
             cited: [],
             timings: data.timings,
             searchQuery: data.search_query && data.search_query !== question ? data.search_query : "",
+            requestId: data.request_id,
             streaming: true,
           }]);
         } else if (event === "token") {
@@ -805,9 +839,9 @@ function App() {
       }
     } catch (err) {
       if (started) setMessages(prev => updateLast(prev, () => ({ streaming: false })));
-      setError(started
+      setError(err.userMessage || (started
         ? "The answer was interrupted. Please try again."
-        : "Couldn't get an answer from the server. It may still be waking up, so try again in a moment.");
+        : "Couldn't get an answer from the server. It may still be waking up, so try again in a moment."));
     } finally {
       clearTimeout(slowTimer);
       setPhase("idle");
@@ -890,7 +924,9 @@ function App() {
             <SendIcon />
           </button>
         </div>
-        <div className="hint">Enter to send · remembers the conversation · click [n] to see a source</div>
+        <div className="hint">
+          Enter to send · remembers the conversation · click [n] to see a source · <a href={`stats.html${location.search}`}>live stats</a>
+        </div>
       </div>
     </React.Fragment>
   );

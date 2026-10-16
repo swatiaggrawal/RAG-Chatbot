@@ -97,11 +97,13 @@ def retrieve(
     reranker: str | None = None,
     query_vector: list[float] | None = None,
     timings: dict | None = None,
+    trace: dict | None = None,
 ) -> list[dict]:
     """
     Returns the top_k chunks for a query, best first. `mode` and
     `reranker` default to the RETRIEVAL_MODE / RERANKER env vars;
-    passing `timings` collects per-stage latency in milliseconds.
+    passing `timings` collects per-stage latency in milliseconds, and
+    `trace` collects LLM usage for monitoring.
     """
     mode = mode or RETRIEVAL_MODE
     reranker = reranker or RERANKER
@@ -118,7 +120,7 @@ def retrieve(
         ])[:CANDIDATES]
 
     searched = time.perf_counter()
-    results = rerank(query, candidates, top_k, method=reranker)
+    results = rerank(query, candidates, top_k, method=reranker, trace=trace)
 
     if timings is not None:
         timings["search_ms"] = round((searched - started) * 1000)

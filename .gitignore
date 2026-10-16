@@ -17,3 +17,4 @@ storage/*
 .DS_Store
 Thumbs.db
 .venv/
+.pytest_cache/

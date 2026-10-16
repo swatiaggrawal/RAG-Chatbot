@@ -40,7 +40,7 @@ _cache: dict[tuple, list[int]] = {}
 stats = {"calls": 0, "failures": 0}
 
 
-def _llm_order(query: str, chunks: list[dict]) -> list[int]:
+def _llm_order(query: str, chunks: list[dict], trace: dict | None = None) -> list[int]:
     passages = "\n\n".join(
         f"[{i}] ({c['source']} > {c.get('title', '')})\n{c['text'][:PASSAGE_CHARS]}"
         for i, c in enumerate(chunks)
@@ -54,6 +54,8 @@ def _llm_order(query: str, chunks: list[dict]) -> list[int]:
         max_tokens=1024,
         temperature=0,
         json_mode=True,
+        purpose="rerank",
+        trace=trace,
     )
     try:
         ranking = json.loads(reply)["ranking"]
@@ -75,7 +77,13 @@ def _pinecone_order(query: str, chunks: list[dict]) -> list[int]:
     return [row.index for row in result.data]
 
 
-def rerank(query: str, chunks: list[dict], top_n: int, method: str | None = None) -> list[dict]:
+def rerank(
+    query: str,
+    chunks: list[dict],
+    top_n: int,
+    method: str | None = None,
+    trace: dict | None = None,
+) -> list[dict]:
     """
     Returns the top_n chunks in reranked order. If the reranker fails
     (rate limit, malformed output), falls back to the incoming order -
@@ -89,9 +97,11 @@ def rerank(query: str, chunks: list[dict], top_n: int, method: str | None = None
     if key not in _cache:
         stats["calls"] += 1
         try:
-            order = _llm_order(query, chunks) if method == "llm" else _pinecone_order(query, chunks)
+            order = _llm_order(query, chunks, trace) if method == "llm" else _pinecone_order(query, chunks)
         except Exception as e:
             stats["failures"] += 1
+            if trace is not None:
+                trace["rerank_fallback"] = True
             print(f"[rerank] {method} reranker failed, keeping hybrid order: {e}")
             return chunks[:top_n]
 

@@ -96,17 +96,39 @@ def _with_fallback(call, model: str):
     raise RuntimeError(f"All models are out of daily quota: {tried}")
 
 
+def _record(trace: dict | None, purpose: str, requested: str, used: str | None, usage, started: float):
+    """
+    Appends one LLM call to the request's trace (see monitoring.py): which
+    model actually answered (it differs from `requested` after a quota
+    fallback), token usage and latency.
+    """
+    if trace is None:
+        return
+    trace.setdefault("llm_calls", []).append({
+        "purpose": purpose,
+        "model": used or requested,
+        "fallback": bool(used) and used != requested,
+        "prompt_tokens": getattr(usage, "prompt_tokens", 0) or 0,
+        "completion_tokens": getattr(usage, "completion_tokens", 0) or 0,
+        "ms": round((time.perf_counter() - started) * 1000),
+    })
+
+
 def complete(
     messages: list[dict],
     model: str = ANSWER_MODEL,
     max_tokens: int = 4096,
     temperature: float = 0.3,
     json_mode: bool = False,
+    purpose: str = "answer",
+    trace: dict | None = None,
 ) -> str:
     extra = {"response_format": {"type": "json_object"}} if json_mode else {}
+    started = time.perf_counter()
     response = _with_fallback(
         lambda m: _create(messages, _params(m, max_tokens, temperature), **extra), model
     )
+    _record(trace, purpose, model, response.model, response.usage, started)
     return THINK_RE.sub("", response.choices[0].message.content or "").strip()
 
 
@@ -115,12 +137,20 @@ def stream(
     model: str = ANSWER_MODEL,
     max_tokens: int = 4096,
     temperature: float = 0.3,
+    purpose: str = "answer",
+    trace: dict | None = None,
 ):
     """Yields the answer text as it's generated (reasoning tokens excluded)."""
+    started = time.perf_counter()
     chunks = _with_fallback(
         lambda m: _create(messages, _params(m, max_tokens, temperature), stream=True), model
     )
+    used, usage = None, None
     for chunk in chunks:
+        used = used or getattr(chunk, "model", None)
+        # Groq reports token usage on the final chunk, under x_groq.
+        usage = getattr(getattr(chunk, "x_groq", None), "usage", None) or usage
         delta = chunk.choices[0].delta.content if chunk.choices else None
         if delta:
             yield delta
+    _record(trace, purpose, model, used, usage, started)

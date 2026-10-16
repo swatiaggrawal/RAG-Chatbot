@@ -1,0 +1,31 @@
+name: Tests
+
+# Unit tests are fully offline (no API keys, no quota), so they run on
+# every push and pull request. The quota-heavy evals live in evals.yml.
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the backend image
+        run: docker build -t rag-chatbot .

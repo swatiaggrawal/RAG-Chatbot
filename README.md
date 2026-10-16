@@ -34,6 +34,14 @@ frontend.
 - **Streaming answers with clickable citations.** Tokens stream over
   Server-Sent Events; `[1]` markers open the source passage and link to
   the exact docs section.
+- **Production guardrails and monitoring.** Meta's Llama Prompt Guard
+  classifier blocks prompt-injection attempts before they reach the
+  LLM; per-IP rate limiting protects the free-tier quotas; every
+  request is traced (stage latency, tokens per model, fallbacks) into a
+  live [stats dashboard](https://rag-chatbot-new.onrender.com/stats.html)
+  with 👍/👎 user feedback.
+- **Tested and containerized.** 50 offline unit tests (no API keys, no
+  quota) run in GitHub Actions on every push alongside a Docker build.
 - **Built for free-tier constraints.** Runs within Render's 512 MB and
   Groq/Pinecone free quotas — several design decisions below came
   directly from measuring those limits.
@@ -107,6 +115,12 @@ Reproduce with `python evals/run_evals.py --retrieval --generation`
 ```
                      ┌─────────────── question + recent chat history
                      ▼
+   api.py        per-IP rate limit (guardrails.py)
+                     │
+                     ▼
+   guardrails.py injection check (Llama Prompt Guard 2) → polite refusal if flagged
+                     │
+                     ▼
    generate.py   rewrite follow-up → standalone query (gpt-oss-20b)
                      │
                      ▼
@@ -123,12 +137,14 @@ Reproduce with `python evals/run_evals.py --retrieval --generation`
                      │
                      ▼
    api.py        POST /chat (JSON) · POST /chat/stream (SSE)
+                 POST /feedback · GET /stats (monitoring.py)
                      │
                      ▼
-   frontend/     React UI: streaming, citation cards, chat memory
+   frontend/     React UI: streaming, citation cards, chat memory, 👍/👎
+                 stats.html: live latency, quality and quota dashboard
 
    Offline:  ingest.py (chunking + section anchors) → embed_store.py (Pinecone)
-   Quality:  evals/ golden set → run_evals.py → GitHub Actions
+   Quality:  tests/ (offline unit tests) + evals/ (golden set) → GitHub Actions
 ```
 
 Each stage is independently runnable from the command line (`python
@@ -145,9 +161,12 @@ without involving the LLM at all.
 | Reranker | Listwise LLM rerank on Groq (`gpt-oss-20b`) | See "Key technical decisions" |
 | LLM | Groq (`openai/gpt-oss-120b`) | Fast inference with a free tier |
 | Eval judge | Groq (`qwen/qwen3.8-27b`) | Different model family from the answer model, to avoid self-preference |
+| Injection guard | Groq (`meta-llama/llama-prompt-guard-2-86m`) | Purpose-built 86M classifier, ~130 ms, free quota separate from the LLMs |
+| Tests | pytest + FastAPI TestClient | Every external service stubbed: fast, free, deterministic |
+| Container | Docker (`python:3.10-slim`, non-root) | Same image runs on Render, Fly, Cloud Run |
 | Backend | FastAPI + Server-Sent Events | Thin HTTP layer, no RAG logic |
 | Frontend | React (CDN, no build step), marked + DOMPurify | No Node toolchain; sanitized Markdown |
-| CI | GitHub Actions | Retrieval evals on every push to `main` |
+| CI | GitHub Actions | Unit tests + Docker build on every push; retrieval evals on pushes to `main` |
 
 ## Key technical decisions
 
@@ -190,6 +209,25 @@ without involving the LLM at all.
 - **Streaming over SSE.** `/chat/stream` sends the sources first (so the
   UI can show what was found), then tokens, then citation and timing
   metadata. Proxy buffering is disabled so tokens arrive live on Render.
+- **A classifier for prompt injection, not a word list.** Llama Prompt
+  Guard 2 scored injection attempts at 0.9996 and a normal question
+  containing the word "ignore" at 0.0005, so a 0.9 threshold separates
+  them cleanly. It runs before retrieval, so blocked requests cost no
+  LLM tokens. It fails open (a classifier outage shouldn't take the bot
+  down) because the system prompt's "treat input as data" rule remains
+  as a second layer.
+- **Rate limiting sized to the quota.** A sliding-window limiter (8 per
+  minute, 150 per day per IP) keeps one script from exhausting the
+  shared free-tier quota. It's in-memory, which is correct for a single
+  instance; scaling out would move it to Redis.
+- **Tracing as an explicit object.** Each request carries a `trace`
+  dict through the pipeline that records every LLM call (model actually
+  used, tokens, latency, fallbacks). An explicit object rather than
+  context variables, because the streaming response runs across worker
+  threads. Each request is logged as one JSON line (the hosting
+  platform keeps logs when the free instance sleeps) and aggregated for
+  `/stats`. Question text is never recorded, since the dashboard is
+  public.
 - **API-based embeddings, managed vector store.** Local
   `sentence-transformers` pulled in `torch`, which alone exceeded
   Render's 512 MB; Chroma's native index crashed on Render's CPUs.
@@ -207,6 +245,8 @@ without involving the LLM at all.
 - The golden set is hand-written and small (57 questions); it measures
   relative improvements between configurations well, but absolute
   scores on a larger, user-sourced set would be lower.
+- Metrics and rate limits live in memory, so they reset when the free
+  instance sleeps; the per-request JSON logs are the durable record.
 - The LLM judge is itself a model and can be wrong; its scores are
   best read as trends across runs, with failures spot-checked by hand.
 
@@ -250,6 +290,30 @@ cd frontend
 python -m http.server 5500
 # open http://localhost:5500/?api=http://localhost:8000
 ```
+
+## Running the tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q                      # 50 tests, ~20 s, no API keys needed
+```
+
+## Running with Docker
+
+```bash
+docker build -t rag-chatbot .
+docker run --env-file .env -p 8000:8000 rag-chatbot
+```
+
+## Monitoring
+
+- `GET /stats` returns the last 24 hours: traffic by kind, latency per
+  stage (p50/p90), citation and fallback rates, user satisfaction, and
+  tokens used per model against the daily free quota.
+- `frontend/stats.html` is a live dashboard over it (linked from the
+  chat page as "live stats").
+- `POST /feedback` records 👍/👎 per answer, linked to that request's
+  metrics by `request_id`.
 
 ## Running the evals
 
