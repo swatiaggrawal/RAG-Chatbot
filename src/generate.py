@@ -12,6 +12,7 @@ reduces (not eliminates) hallucination.
 """
 
 import os
+import re
 import sys
 from dotenv import load_dotenv
 from groq import Groq
@@ -27,13 +28,29 @@ client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 # retires models regularly - see https://console.groq.com/docs/deprecations
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
-SYSTEM_PROMPT = """You are a helpful assistant that answers questions using ONLY the context provided below.
+SYSTEM_PROMPT = """You are FastAPI Docs Copilot, a friendly, upbeat assistant that helps developers understand FastAPI. You answer using ONLY the documentation context provided with each question.
 
 Rules:
-- If the answer isn't in the context, say "I don't have enough information to answer that" - do not make things up.
-- Keep answers concise and directly grounded in the context.
-- If you use information from the context, you don't need to cite chunk numbers, just answer naturally.
+- Stay grounded: every fact must come from the context. If the context doesn't cover the question, say so kindly (e.g. "I couldn't find that in the FastAPI docs I have"), then suggest a related topic you can help with. Never make things up.
+- Be warm and conversational, like a helpful teammate, but get to the point - no filler.
+- Format with Markdown: short paragraphs, bullet points for lists, **bold** for key terms, and fenced ```python code blocks when showing code from the context.
+- Don't mention "the context" or chunk numbers - just answer naturally.
 """
+
+SMALL_TALK_PROMPT = """You are FastAPI Docs Copilot, a friendly, upbeat assistant that answers questions about FastAPI using its official documentation.
+
+The user is making small talk (a greeting, thanks, goodbye, or asking what you can do). Reply warmly in 1-3 short sentences. When it fits, invite them to ask about FastAPI and suggest one or two example topics such as path parameters, request bodies, dependencies, middleware, CORS, background tasks, or testing. Use Markdown sparingly."""
+
+# Greetings / thanks / "what can you do" don't need the docs - answering
+# them through retrieval made the bot reply "I don't have enough
+# information" to "hi". These skip retrieval and get a friendly reply.
+SMALL_TALK_RE = re.compile(
+    r"^\s*(hi+|hey+|hello+|hiya|yo|sup|howdy|greetings|good (morning|afternoon|evening)"
+    r"|thanks?( you)?|thank u|thx|ty|cheers|bye|goodbye|see (you|ya)|ok(ay)?|cool|nice|great|awesome"
+    r"|how are you( doing)?|who are you|what are you|what can you do|help)"
+    r"[\s!.?,:)]*(there|bot|copilot|buddy|friend)?[\s!.?,:)]*$",
+    re.IGNORECASE,
+)
 
 
 def build_prompt(question: str, chunks: list[dict]) -> str:
@@ -48,12 +65,32 @@ Question: {question}
 Answer based only on the context above:"""
 
 
+def _complete(system: str, user: str) -> str:
+    response = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        # gpt-oss models reason before answering, and reasoning tokens
+        # count toward max_tokens - keep reasoning light and leave enough
+        # headroom that the visible answer can't get starved out.
+        reasoning_effort="low",
+        max_tokens=4096,
+        temperature=0.3,
+    )
+    return response.choices[0].message.content
+
+
 def answer_question(question: str, top_k: int = 4) -> dict:
     """
     Full RAG call: retrieve relevant chunks, build a grounded prompt,
     call the LLM, and return the answer plus which sources were used
     (so you can show citations in the frontend later).
     """
+    if SMALL_TALK_RE.match(question):
+        return {"answer": _complete(SMALL_TALK_PROMPT, question), "sources": []}
+
     chunks = retrieve(question, top_k=top_k)
 
     if not chunks:
@@ -61,21 +98,7 @@ def answer_question(question: str, top_k: int = 4) -> dict:
 
     prompt = build_prompt(question, chunks)
 
-    response = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        # gpt-oss models reason before answering, and reasoning tokens
-        # count toward max_tokens - keep reasoning light and leave enough
-        # headroom that the visible answer can't get starved out.
-        reasoning_effort="low",
-        max_tokens=4096,
-        temperature=0.2,  # low temperature keeps answers close to the context
-    )
-
-    answer_text = response.choices[0].message.content
+    answer_text = _complete(SYSTEM_PROMPT, prompt)
     sources = list({c["source"] for c in chunks})  # dedupe
 
     return {"answer": answer_text, "sources": sources}

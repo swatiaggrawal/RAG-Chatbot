@@ -6,193 +6,432 @@
 <title>FastAPI Docs Copilot</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 
 <style>
   :root {
-    --bg: #1C2333;
-    --bg-panel: #232B40;
-    --accent-sage: #7C9885;
-    --accent-gold: #C9A66B;
-    --text: #E8E6E1;
-    --text-dim: #9BA3B7;
-    --border: #33405C;
-    --user-bubble: #2C3650;
+    --bg: #05060f;
+    --panel: rgba(16, 20, 40, 0.55);
+    --cyan: #22d3ee;
+    --violet: #a78bfa;
+    --pink: #f472b6;
+    --text: #e6ecff;
+    --text-dim: #8b93b8;
+    --border: rgba(120, 140, 255, 0.18);
+    --glow: 0 0 24px rgba(34, 211, 238, 0.35);
+    --grad: linear-gradient(135deg, var(--cyan), var(--violet) 55%, var(--pink));
   }
 
   * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
 
   body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font-family: 'Inter', sans-serif;
-    min-height: 100vh;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    overflow: hidden;
   }
 
+  /* ---------- animated background ---------- */
+  .bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.45;
+    animation: drift 22s ease-in-out infinite alternate;
+  }
+  .orb.a { width: 520px; height: 520px; background: #0e7490; top: -160px; left: -140px; }
+  .orb.b { width: 460px; height: 460px; background: #6d28d9; bottom: -180px; right: -120px; animation-duration: 27s; }
+  .orb.c { width: 300px; height: 300px; background: #be185d; top: 40%; left: 55%; opacity: 0.25; animation-duration: 31s; }
+
+  @keyframes drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    50%  { transform: translate(80px, 60px) scale(1.12); }
+    100% { transform: translate(-60px, 30px) scale(0.95); }
+  }
+
+  .grid {
+    position: absolute;
+    left: -50%; right: -50%; bottom: -10%;
+    height: 55%;
+    background-image:
+      linear-gradient(rgba(34, 211, 238, 0.13) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34, 211, 238, 0.13) 1px, transparent 1px);
+    background-size: 56px 56px;
+    transform: perspective(500px) rotateX(62deg);
+    transform-origin: bottom;
+    mask-image: linear-gradient(to top, black 10%, transparent 85%);
+    -webkit-mask-image: linear-gradient(to top, black 10%, transparent 85%);
+    animation: grid-move 6s linear infinite;
+  }
+  @keyframes grid-move { to { background-position: 0 56px; } }
+
+  .scanline {
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.018) 0 1px, transparent 1px 3px);
+  }
+
+  /* ---------- layout ---------- */
   #root {
-    max-width: 760px;
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    height: 100vh;
+    height: 100dvh;
     margin: 0 auto;
-    min-height: 100vh;
     display: flex;
     flex-direction: column;
+    padding: 0 16px;
   }
 
   header {
-    padding: 36px 24px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 22px 4px 18px;
     border-bottom: 1px solid var(--border);
+    animation: fade-down 0.7s ease both;
   }
+
+  .logo {
+    width: 42px; height: 42px; flex: none;
+    border-radius: 12px;
+    background: var(--grad);
+    color: #05060f;
+    display: grid; place-items: center;
+    animation: pulse-glow 3.5s ease-in-out infinite;
+  }
+  .logo svg { width: 22px; height: 22px; }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 14px rgba(34, 211, 238, 0.35); }
+    50%      { box-shadow: 0 0 30px rgba(167, 139, 250, 0.6); }
+  }
+
+  .titles { flex: 1; min-width: 0; }
 
   header h1 {
-    font-family: 'Fraunces', serif;
-    font-weight: 600;
-    font-size: 28px;
-    margin: 0 0 6px;
-    letter-spacing: -0.02em;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: 0.06em;
+    margin: 0 0 3px;
+    background: linear-gradient(90deg, var(--cyan), var(--violet), var(--pink), var(--cyan));
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 8s linear infinite;
   }
+  @keyframes shimmer { to { background-position: 300% 0; } }
 
-  header p {
+  header p { color: var(--text-dim); font-size: 13px; margin: 0; }
+
+  .status {
+    display: flex; align-items: center; gap: 7px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
     color: var(--text-dim);
-    font-size: 14px;
-    margin: 0;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 6px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
   }
+  .status .dot { width: 7px; height: 7px; border-radius: 50%; background: #64748b; position: relative; }
+  .status.online .dot { background: #34d399; }
+  .status.waking .dot { background: #fbbf24; }
+  .status.offline .dot { background: #f87171; }
+  .status.online .dot::after, .status.waking .dot::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: inherit; animation: ping 1.6s ease-out infinite;
+  }
+  @keyframes ping { to { transform: scale(2.8); opacity: 0; } }
 
+  /* ---------- chat ---------- */
   .chat-area {
     flex: 1;
-    padding: 24px;
     overflow-y: auto;
+    padding: 24px 4px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 22px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(167, 139, 250, 0.35) transparent;
   }
 
-  .empty-state {
-    color: var(--text-dim);
-    font-size: 14px;
+  .hero {
     margin: auto;
     text-align: center;
-    max-width: 320px;
-    line-height: 1.6;
+    max-width: 560px;
+    animation: fade-up 0.8s 0.15s ease both;
   }
 
-  .message-row {
-    display: flex;
-    flex-direction: column;
-    max-width: 85%;
+  .core { width: 96px; height: 96px; margin: 0 auto 22px; position: relative; }
+  .core .ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--cyan);
+    border-right-color: var(--violet);
+    animation: spin 3s linear infinite;
   }
+  .core .ring.r2 { inset: 12px; border-top-color: var(--pink); border-right-color: transparent; border-left-color: var(--cyan); animation-duration: 4.5s; animation-direction: reverse; }
+  .core .heart {
+    position: absolute; inset: 30px; border-radius: 50%;
+    background: var(--grad);
+    box-shadow: 0 0 40px rgba(34, 211, 238, 0.6);
+    animation: breathe 2.8s ease-in-out infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes breathe { 50% { transform: scale(0.82); opacity: 0.75; } }
 
-  .message-row.user {
-    align-self: flex-end;
-    align-items: flex-end;
-  }
+  .hero h2 { font-family: 'Orbitron', sans-serif; font-size: 22px; letter-spacing: 0.04em; margin: 0 0 10px; }
+  .hero p { color: var(--text-dim); line-height: 1.6; font-size: 15px; margin: 0 0 24px; }
 
-  .message-row.assistant {
-    align-self: flex-start;
-    align-items: flex-start;
+  .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .chip {
+    font: inherit; font-size: 14px;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 9px 16px;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    animation: fade-up 0.6s ease both;
   }
+  .chip:hover { transform: translateY(-2px); border-color: var(--cyan); box-shadow: var(--glow); }
+  .chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+  .message-row { display: flex; gap: 12px; max-width: 88%; animation: msg-in 0.45s cubic-bezier(.2,.8,.2,1) both; }
+  .message-row.user { align-self: flex-end; flex-direction: row-reverse; }
+  .message-row.assistant { align-self: flex-start; }
+
+  @keyframes msg-in { from { opacity: 0; transform: translateY(14px) scale(0.98); } }
+
+  .avatar {
+    width: 32px; height: 32px; flex: none;
+    border-radius: 10px;
+    display: grid; place-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+  }
+  .assistant .avatar { background: var(--grad); color: #05060f; box-shadow: var(--glow); }
+  .user .avatar { background: rgba(167, 139, 250, 0.15); border: 1px solid rgba(167, 139, 250, 0.4); color: var(--violet); }
+  .avatar svg { width: 16px; height: 16px; }
+
+  .msg-body { min-width: 0; display: flex; flex-direction: column; }
+  .user .msg-body { align-items: flex-end; }
 
   .bubble {
-    padding: 14px 16px;
-    border-radius: 4px;
-    line-height: 1.55;
+    padding: 13px 16px;
+    border-radius: 16px;
+    line-height: 1.6;
     font-size: 15px;
-    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
 
   .user .bubble {
-    background: var(--user-bubble);
-    border: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(167, 139, 250, 0.22));
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    border-top-right-radius: 4px;
+    white-space: pre-wrap;
   }
 
   .assistant .bubble {
-    background: var(--bg-panel);
-    border-left: 2px solid var(--accent-sage);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-top-left-radius: 4px;
+    position: relative;
+  }
+  .assistant .bubble::before {
+    content: ""; position: absolute; left: -1px; top: 12px; bottom: 12px; width: 2px;
+    background: var(--grad); border-radius: 2px;
   }
 
-  .sources {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 8px;
+  /* markdown inside answers */
+  .md > :first-child { margin-top: 0; }
+  .md > :last-child { margin-bottom: 0; }
+  .md p { margin: 0 0 10px; }
+  .md ul, .md ol { margin: 0 0 10px; padding-left: 22px; }
+  .md li { margin: 3px 0; }
+  .md li::marker { color: var(--cyan); }
+  .md strong { color: #fff; font-weight: 600; }
+  .md a { color: var(--cyan); }
+  .md h1, .md h2, .md h3 { font-size: 16px; margin: 14px 0 8px; color: var(--cyan); }
+  .md code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    background: rgba(34, 211, 238, 0.1);
+    color: #a5f3fc;
+    padding: 1px 6px;
+    border-radius: 5px;
   }
+  .md pre {
+    background: #03040b;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    margin: 0 0 10px;
+  }
+  .md pre code { background: none; padding: 0; color: #d6e0ff; line-height: 1.55; }
+
+  .caret {
+    display: inline-block; width: 8px; height: 1.05em;
+    background: var(--cyan); margin-left: 2px; vertical-align: text-bottom;
+    animation: blink 0.9s steps(2) infinite;
+    box-shadow: 0 0 8px var(--cyan);
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 9px; }
 
   .source-tag {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    color: var(--accent-gold);
-    border: 1px solid var(--accent-gold);
-    border-radius: 3px;
-    padding: 3px 7px;
-    opacity: 0.85;
+    color: #a5f3fc;
+    background: rgba(34, 211, 238, 0.08);
+    border: 1px solid rgba(34, 211, 238, 0.3);
+    border-radius: 6px;
+    padding: 3px 8px;
+    animation: pop 0.35s cubic-bezier(.2,1.4,.4,1) both;
+    transition: box-shadow 0.2s, border-color 0.2s;
   }
+  .source-tag:hover { border-color: var(--cyan); box-shadow: var(--glow); }
+  .source-tag::before { content: "◆ "; color: var(--violet); }
+  @keyframes pop { from { opacity: 0; transform: scale(0.6); } }
 
-  .thinking {
+  .copy-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
     color: var(--text-dim);
-    font-size: 14px;
-    font-style: italic;
-  }
-
-  .input-area {
-    padding: 20px 24px 28px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    gap: 10px;
-  }
-
-  .input-area input {
-    flex: 1;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 12px 14px;
-    color: var(--text);
-    font-family: 'Inter', sans-serif;
-    font-size: 14px;
-  }
-
-  .input-area input:focus {
-    outline: 2px solid var(--accent-sage);
-    outline-offset: 1px;
-  }
-
-  .input-area button {
-    background: var(--accent-sage);
-    border: none;
-    border-radius: 4px;
-    padding: 0 20px;
-    color: #14171f;
-    font-family: 'Inter', sans-serif;
-    font-weight: 600;
-    font-size: 14px;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 3px 8px;
     cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .copy-btn:hover, .copy-btn:focus-visible { color: var(--cyan); border-color: var(--border); outline: none; }
+
+  /* typing indicator */
+  .thinking { display: flex; align-items: center; gap: 12px; }
+  .dots { display: flex; gap: 5px; }
+  .dots span {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--cyan);
+    animation: bounce 1.2s ease-in-out infinite;
+    box-shadow: 0 0 10px var(--cyan);
+  }
+  .dots span:nth-child(2) { animation-delay: 0.15s; background: var(--violet); box-shadow: 0 0 10px var(--violet); }
+  .dots span:nth-child(3) { animation-delay: 0.3s; background: var(--pink); box-shadow: 0 0 10px var(--pink); }
+  @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.5; } 40% { transform: translateY(-7px); opacity: 1; } }
+
+  .thinking-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
   }
 
-  .input-area button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .input-area button:focus-visible {
-    outline: 2px solid var(--accent-gold);
-    outline-offset: 2px;
-  }
-
+  /* ---------- error + input ---------- */
   .error-banner {
-    background: #3A2530;
-    border: 1px solid #8a4a5a;
-    color: #E8B4C0;
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    color: #fecaca;
     padding: 10px 14px;
-    border-radius: 4px;
+    border-radius: 12px;
     font-size: 13px;
-    margin: 0 24px;
+    margin-bottom: 10px;
+    animation: shake 0.4s ease;
+  }
+  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+
+  .input-area { padding: 6px 0 22px; }
+
+  .input-shell {
+    display: flex; gap: 8px; align-items: center;
+    padding: 6px 6px 6px 18px;
+    border-radius: 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  .input-shell:focus-within { border-color: rgba(34, 211, 238, 0.6); box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.08), var(--glow); }
+
+  .input-shell input {
+    flex: 1; min-width: 0;
+    background: none; border: none; outline: none;
+    color: var(--text);
+    font: inherit; font-size: 15px;
+    padding: 10px 0;
+  }
+  .input-shell input::placeholder { color: var(--text-dim); }
+
+  .send-btn {
+    width: 46px; height: 46px; flex: none;
+    border: none; border-radius: 12px;
+    background: var(--grad);
+    color: #05060f;
+    display: grid; place-items: center;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+    box-shadow: var(--glow);
+  }
+  .send-btn svg { width: 20px; height: 20px; }
+  .send-btn:hover:not(:disabled) { transform: translateY(-1px) scale(1.04); box-shadow: 0 0 32px rgba(167, 139, 250, 0.6); }
+  .send-btn:active:not(:disabled) { transform: scale(0.94); }
+  .send-btn:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+  .send-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
+  .hint { text-align: center; color: var(--text-dim); font-size: 11px; margin-top: 10px; font-family: 'JetBrains Mono', monospace; opacity: 0.7; }
+
+  @keyframes fade-up { from { opacity: 0; transform: translateY(16px); } }
+  @keyframes fade-down { from { opacity: 0; transform: translateY(-12px); } }
+
+  @media (max-width: 600px) {
+    header p { display: none; }
+    header h1 { font-size: 15px; }
+    .message-row { max-width: 100%; }
+    .avatar { display: none; }
+    .hero h2 { font-size: 18px; }
+    .hero p { font-size: 14px; margin-bottom: 18px; }
+    .core { width: 72px; height: 72px; margin-bottom: 16px; }
+    .core .ring.r2 { inset: 9px; }
+    .core .heart { inset: 22px; }
+    .chip { font-size: 13px; padding: 8px 14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
   }
 </style>
 </head>
 <body>
+<div class="bg" aria-hidden="true">
+  <div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+  <div class="grid"></div>
+  <div class="scanline"></div>
+</div>
 <div id="root"></div>
 
 <script type="text/babel">
@@ -202,25 +441,144 @@ const { useState, useRef, useEffect } = React;
 // (e.g. update to your deployed Render/HF Spaces URL once deployed)
 const API_URL = "https://rag-chatbot-s2r2.onrender.com";
 
+const SUGGESTIONS = [
+  "How do path parameters work?",
+  "How do I enable CORS?",
+  "What are background tasks?",
+  "How do I test my app?",
+];
+
+const THINKING_STEPS = ["Scanning the docs", "Retrieving relevant chunks", "Composing an answer"];
+
+const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+marked.setOptions({ gfm: true, breaks: true });
+
+function renderMarkdown(text) {
+  return { __html: DOMPurify.sanitize(marked.parse(text || "")) };
+}
+
+const BotIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z" />
+    <path d="M19 16l.8 1.9L22 19l-2.2.9L19 22l-.8-2.1L16 19l2.2-1.1z" />
+  </svg>
+);
+
+const SendIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </svg>
+);
+
+// Reveals an answer a few characters at a time for a typewriter effect.
+function TypedAnswer({ text, onDone, onTick }) {
+  const [shown, setShown] = useState(REDUCED_MOTION ? text.length : 0);
+
+  useEffect(() => {
+    if (shown >= text.length) { onDone(); return; }
+    const step = Math.max(2, Math.ceil(text.length / 160));
+    const t = setTimeout(() => { setShown(n => Math.min(text.length, n + step)); onTick(); }, 14);
+    return () => clearTimeout(t);
+  }, [shown]);
+
+  return (
+    <div className="bubble">
+      <div className="md" dangerouslySetInnerHTML={renderMarkdown(text.slice(0, shown))} />
+      <span className="caret" />
+    </div>
+  );
+}
+
+function AssistantMessage({ msg, onTyped, onTick }) {
+  const [copied, setCopied] = useState(false);
+
+  function copy() {
+    navigator.clipboard?.writeText(msg.text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <div className="message-row assistant">
+      <div className="avatar"><BotIcon /></div>
+      <div className="msg-body">
+        {msg.typing
+          ? <TypedAnswer text={msg.text} onDone={onTyped} onTick={onTick} />
+          : <div className="bubble"><div className="md" dangerouslySetInnerHTML={renderMarkdown(msg.text)} /></div>}
+        {!msg.typing && (
+          <div className="meta">
+            {(msg.sources || []).map((s, j) => (
+              <span key={j} className="source-tag" style={{ animationDelay: `${j * 70}ms` }}>{s}</span>
+            ))}
+            <button className="copy-btn" onClick={copy}>{copied ? "copied ✓" : "copy"}</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Thinking({ slow }) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setStep(s => (s + 1) % THINKING_STEPS.length), 1600);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div className="message-row assistant">
+      <div className="avatar"><BotIcon /></div>
+      <div className="bubble thinking" role="status">
+        <div className="dots"><span /><span /><span /></div>
+        <span className="thinking-text">
+          {slow ? "Waking up the server (free tier, ~30-60s)..." : THINKING_STEPS[step] + "..."}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [slow, setSlow] = useState(false);
   const [error, setError] = useState(null);
-  const chatEndRef = useRef(null);
+  const [status, setStatus] = useState("waking");
+  const chatRef = useRef(null);
+  const inputRef = useRef(null);
 
+  function scrollToBottom(smooth = true) {
+    const el = chatRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  }
+
+  useEffect(() => { if (messages.length) scrollToBottom(); }, [messages.length, loading]);
+
+  // Ping the backend on load so the status light shows whether the
+  // free-tier server is awake (and starts waking it up if it's asleep).
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 90000);
+    fetch(`${API_URL}/health`, { signal: controller.signal })
+      .then(r => setStatus(r.ok ? "online" : "offline"))
+      .catch(() => setStatus("offline"))
+      .finally(() => clearTimeout(timer));
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, []);
 
-  async function sendQuestion() {
-    const question = input.trim();
+  async function sendQuestion(text) {
+    const question = (text ?? input).trim();
     if (!question || loading) return;
 
     setError(null);
     setMessages(prev => [...prev, { role: "user", text: question }]);
     setInput("");
     setLoading(true);
+    setSlow(false);
+    const slowTimer = setTimeout(() => setSlow(true), 8000);
 
     try {
       const res = await fetch(`${API_URL}/chat`, {
@@ -229,79 +587,94 @@ function App() {
         body: JSON.stringify({ question }),
       });
 
-      if (!res.ok) {
-        throw new Error(`Server responded with ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
 
       const data = await res.json();
+      setStatus("online");
       setMessages(prev => [...prev, {
         role: "assistant",
         text: data.answer,
         sources: data.sources,
+        typing: true,
       }]);
     } catch (err) {
-      setError(
-        "Couldn't reach the chatbot API. Is it running at " + API_URL + "?"
-      );
+      setError("Couldn't get an answer from the server. It may still be waking up, so try again in a moment.");
     } finally {
+      clearTimeout(slowTimer);
       setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 0);
     }
   }
 
-  function handleKeyDown(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendQuestion();
-    }
+  function markTyped(i) {
+    setMessages(prev => prev.map((m, j) => (j === i ? { ...m, typing: false } : m)));
   }
+
+  const statusLabel = { online: "online", waking: "connecting", offline: "offline" }[status];
 
   return (
     <React.Fragment>
       <header>
-        <h1>FastAPI Docs Copilot</h1>
-        <p>Grounded answers from FastAPI's official documentation, with sources cited.</p>
+        <div className="logo"><BotIcon /></div>
+        <div className="titles">
+          <h1>FASTAPI DOCS COPILOT</h1>
+          <p>Answers grounded in FastAPI's official docs, with sources cited.</p>
+        </div>
+        <div className={`status ${status}`}><span className="dot" />{statusLabel}</div>
       </header>
 
-      <div className="chat-area">
+      <div className="chat-area" ref={chatRef}>
         {messages.length === 0 && (
-          <div className="empty-state">
-            Ask a question about FastAPI — request bodies, dependencies,
-            middleware, background tasks, anything in the docs.
-            Every answer is grounded in retrieved source text — no source, no answer.
+          <div className="hero">
+            <div className="core"><div className="ring" /><div className="ring r2" /><div className="heart" /></div>
+            <h2>Hey there! What are we building?</h2>
+            <p>
+              Ask me anything about FastAPI, like routing, request bodies, dependencies,
+              middleware or testing. Every answer comes straight from the official docs.
+            </p>
+            <div className="chips">
+              {SUGGESTIONS.map((s, i) => (
+                <button key={s} className="chip" style={{ animationDelay: `${0.35 + i * 0.08}s` }} onClick={() => sendQuestion(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        {messages.map((m, i) => (
-          <div key={i} className={`message-row ${m.role}`}>
-            <div className="bubble">{m.text}</div>
-            {m.role === "assistant" && m.sources && m.sources.length > 0 && (
-              <div className="sources">
-                {m.sources.map((s, j) => (
-                  <span key={j} className="source-tag">{s}</span>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+        {messages.map((m, i) =>
+          m.role === "user" ? (
+            <div key={i} className="message-row user">
+              <div className="avatar">you</div>
+              <div className="msg-body"><div className="bubble">{m.text}</div></div>
+            </div>
+          ) : (
+            <AssistantMessage key={i} msg={m} onTyped={() => markTyped(i)} onTick={() => scrollToBottom(false)} />
+          )
+        )}
 
-        {loading && <div className="thinking">Retrieving and generating...</div>}
-        <div ref={chatEndRef} />
+        {loading && <Thinking slow={slow} />}
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
-
       <div className="input-area">
-        <input
-          type="text"
-          placeholder="Ask something..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={loading}
-        />
-        <button onClick={sendQuestion} disabled={loading || !input.trim()}>
-          Send
-        </button>
+        {error && <div className="error-banner" role="alert">{error}</div>}
+        <div className="input-shell">
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Ask about FastAPI..."
+            aria-label="Your question"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendQuestion(); } }}
+            disabled={loading}
+            autoFocus
+          />
+          <button className="send-btn" aria-label="Send" onClick={() => sendQuestion()} disabled={loading || !input.trim()}>
+            <SendIcon />
+          </button>
+        </div>
+        <div className="hint">Enter to send · answers grounded in the docs</div>
       </div>
     </React.Fragment>
   );
