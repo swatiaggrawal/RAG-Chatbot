@@ -37,14 +37,15 @@ load_dotenv()
 pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
 
 EMBEDDING_MODEL = "llama-text-embed-v2"
-# llama-text-embed-v2 supports 384/512/768/1024/2048 dimensions -
-# this MUST match the index's configured dimension below.
-EMBEDDING_DIM = 768
+# 1024 is llama-text-embed-v2's native output size (the inference API
+# returns it regardless of a requested dimension) - this MUST match the
+# index's configured dimension below.
+EMBEDDING_DIM = 1024
 
 # New index name: vectors from a different embedding model live in a
 # different vector space, so the old Gemini-embedded index can't be
 # reused. A fresh name makes api.py rebuild the index on first boot.
-INDEX_NAME = "rag-chatbot-fastapi-docs-v2"
+INDEX_NAME = "rag-chatbot-fastapi-docs-v3"
 
 # Pinecone's inference endpoint caps input batches at 96 strings per call.
 EMBED_BATCH_SIZE = 96
@@ -74,6 +75,14 @@ def get_index():
             print("  waiting for index to be ready...")
             time.sleep(2)
 
+    index_dim = pc.describe_index(INDEX_NAME).dimension
+    if index_dim != EMBEDDING_DIM:
+        raise RuntimeError(
+            f"Pinecone index '{INDEX_NAME}' has dimension {index_dim}, but "
+            f"embeddings are {EMBEDDING_DIM}-dim. Delete the index in the "
+            "Pinecone console so it can be recreated, or change INDEX_NAME."
+        )
+
     return pc.Index(INDEX_NAME)
 
 
@@ -91,10 +100,15 @@ def embed(texts: list[str], input_type: str) -> list[list[float]]:
         parameters={
             "input_type": input_type,
             "truncate": "END",
-            "dimension": EMBEDDING_DIM,
         },
     )
-    return [e["values"] for e in response]
+    embeddings = [e["values"] for e in response]
+    if embeddings and len(embeddings[0]) != EMBEDDING_DIM:
+        raise RuntimeError(
+            f"{EMBEDDING_MODEL} returned {len(embeddings[0])}-dim vectors, "
+            f"expected {EMBEDDING_DIM} - update EMBEDDING_DIM to match."
+        )
+    return embeddings
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
