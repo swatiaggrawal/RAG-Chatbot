@@ -35,6 +35,9 @@ Read the question and the numbered passages, then return JSON: {"ranking": [pass
 Put passages that directly answer the question first, then partially relevant ones. Include every passage number exactly once."""
 
 _cache: dict[tuple, list[int]] = {}
+# Counted so the eval harness can flag runs where reranking silently fell
+# back (e.g. a rate limit), which would otherwise skew its numbers.
+stats = {"calls": 0, "failures": 0}
 
 
 def _llm_order(query: str, chunks: list[dict]) -> list[int]:
@@ -84,9 +87,11 @@ def rerank(query: str, chunks: list[dict], top_n: int, method: str | None = None
 
     key = (method, query, tuple(c["chunk_id"] for c in chunks))
     if key not in _cache:
+        stats["calls"] += 1
         try:
             order = _llm_order(query, chunks) if method == "llm" else _pinecone_order(query, chunks)
         except Exception as e:
+            stats["failures"] += 1
             print(f"[rerank] {method} reranker failed, keeping hybrid order: {e}")
             return chunks[:top_n]
 

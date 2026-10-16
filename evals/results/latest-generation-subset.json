@@ -1,0 +1,212 @@
+{
+  "run_at": "2026-10-16 12:16 UTC",
+  "generation": {
+    "summary": {
+      "answered questions": 6,
+      "faithfulness (1-5)": 4.833333333333333,
+      "relevance (1-5)": 4.333333333333333,
+      "correctness (1-5)": 3.6666666666666665,
+      "citation accuracy": 1.0,
+      "correct refusals": 0.0,
+      "pass rate": 0.5,
+      "latency p50 (ms)": 17727,
+      "latency p90 (ms)": 17897
+    },
+    "failure_taxonomy": {
+      "ok": 3,
+      "incomplete": 2,
+      "false_refusal": 1
+    },
+    "cases": [
+      {
+        "id": "debugging",
+        "type": "factual",
+        "label": "ok",
+        "grade": {
+          "faithfulness": 5,
+          "relevance": 5,
+          "correctness": 5,
+          "citations_ok": true,
+          "refused": false,
+          "reason": "The answer accurately covers all key facts (uvicorn.run under __main__) and provides specific, source-supported steps for VS Code and PyCharm."
+        },
+        "search_query": "How can I run my app inside my editor's debugger?",
+        "cited": [
+          1,
+          3
+        ],
+        "sources": [
+          "tutorial-debugging.md",
+          "tutorial-debugging.md",
+          "tutorial-debugging.md",
+          "tutorial-debugging.md",
+          "tutorial-first-steps.md"
+        ],
+        "timings": {
+          "search_ms": 5498,
+          "rerank_ms": 751,
+          "generate_ms": 1077
+        },
+        "answer": "You can start the FastAPI server directly from the file that contains your app, so the debugger can attach to it.\n\n**Typical steps**\n\n1. **Make sure the server is started from the file itself** \u2013 put the `uvicorn.run(...)` call inside an `if __name__ == \"__main__\":` block (the code runs only when you execute the file, not when it\u2019s imported)[3].  \n\n2. **Configure your editor\u2019s debugger**  \n\n   * **VS\u202fCode**  \n     - Open the **Debug** panel.  \n     - Click **Add configuration\u2026** \u2192 **Python**.  \n     - Choose **Python: Current File (Integrated Terminal)**.  \n     - Run the debugger; it will launch `uvicorn` with your FastAPI code and stop at any break\u2011points you set[1].  \n\n   * **PyCharm**  \n     - Open the **Run** menu \u2192 **Debug\u2026**.  \n     - Select the file that contains your FastAPI app (e.g., `main.py`).  \n     - The debugger will start the server and honor your break\u2011points[1].  \n\nWith the server started this way, you can place breakpoints in any part of your FastAPI code (including path operations) and debug exactly as you would a regular Python script."
+      },
+      {
+        "id": "numeric-validation",
+        "type": "factual",
+        "label": "incomplete",
+        "grade": {
+          "faithfulness": 5,
+          "relevance": 5,
+          "correctness": 3,
+          "citations_ok": true,
+          "refused": false,
+          "reason": "The answer uses the deprecated `Path(...)` syntax instead of the recommended `Annotated` syntax specified in the key facts."
+        },
+        "search_query": "How do I require that a path parameter item_id is at least 1?",
+        "cited": [
+          1,
+          2
+        ],
+        "sources": [
+          "tutorial-path-params-numeric-validations.md",
+          "tutorial-path-params-numeric-validations.md",
+          "tutorial-path-params-numeric-validations.md",
+          "tutorial-path-params.md",
+          "tutorial-path-params.md"
+        ],
+        "timings": {
+          "search_ms": 1047,
+          "rerank_ms": 437,
+          "generate_ms": 880
+        },
+        "answer": "You can enforce a minimum value for a path parameter by using **`Path`** (or `Annotated`\u202f+\u202f`Path`) and setting the **`ge`** (greater\u2011than\u2011or\u2011equal) constraint to\u202f`1`.\n\n```python\nfrom fastapi import FastAPI, Path\n\napp = FastAPI()\n\n@app.get(\"/items/{item_id}\")\ndef read_item(item_id: int = Path(..., ge=1)):\n    return {\"item_id\": item_id}\n```\n\nHere `ge=1` tells FastAPI that `item_id` must be an integer **greater than or equal to\u202f1**\u202f\u2014\u202fso values\u202f`0`,\u202f`-5`, etc., will be rejected with a validation error. This is described in the numeric\u2011validation docs where `ge=1` is used for \u201cgreater than or equal\u201d\u202f[1] and the import of `Path` is shown in the path\u2011parameter guide\u202f[2]."
+      },
+      {
+        "id": "examples",
+        "type": "factual",
+        "label": "incomplete",
+        "grade": {
+          "faithfulness": 4,
+          "relevance": 5,
+          "correctness": 3,
+          "citations_ok": true,
+          "refused": false,
+          "reason": "The answer misses the key methods of using `model_config` in Pydantic models and `Field(examples=...)`, covering only `Body(examples=...)`."
+        },
+        "search_query": "How do I show example request data in the docs UI?",
+        "cited": [
+          1,
+          2,
+          5
+        ],
+        "sources": [
+          "tutorial-schema-extra-example.md",
+          "tutorial-schema-extra-example.md",
+          "tutorial-schema-extra-example.md",
+          "tutorial-schema-extra-example.md",
+          "tutorial-schema-extra-example.md"
+        ],
+        "timings": {
+          "search_ms": 736,
+          "rerank_ms": 14635,
+          "generate_ms": 2356
+        },
+        "answer": "You can add example request bodies directly to the **`Body()`** parameter (or any other parameter type) and FastAPI will render them in the Swagger UI.\n\n**How to do it**\n\n1. **Pass `examples` (or `openapi_examples`) to `Body()`**  \n   ```python\n   from fastapi import FastAPI, Body\n\n   app = FastAPI()\n\n   @app.post(\"/items/\")\n   async def create_item(\n       payload: dict = Body(\n           ...,\n           examples={\n               \"example1\": {\n                   \"summary\": \"A simple example\",\n                   \"value\": {\"name\": \"Foo\", \"price\": 42}\n               },\n               \"example2\": {\n                   \"summary\": \"Another example\",\n                   \"value\": {\"name\": \"Bar\", \"price\": 99}\n               },\n           },\n       )\n   ):\n       return payload\n   ```\n   The `examples` dict is added to the **JSON Schema** for that body, and Swagger UI will show a dropdown with the defined examples. This is demonstrated in the \u201cBody with multiple `examples`\u201d section, where multiple examples are passed to `Body()` and become part of the internal JSON Schema\u202f[1].\n\n2. **If you need the older OpenAPI\u2011specific `examples` field** (useful for tools that don\u2019t read the JSON Schema `examples`), add `openapi_examples` to `Body()` instead. FastAPI will place those examples in the OpenAPI *path operation* section, and Swagger UI will display them correctly\u202f[2][5].\n\n**Result in the docs UI**\n\n- With `examples` you\u2019ll see a single example block (Swagger UI currently doesn\u2019t render multiple JSON\u2011Schema examples, but the data is still present)\u202f[1].\n- With `openapi_examples` you get a dropdown that lets users pick among the defined examples, because Swagger UI supports the OpenAPI\u2011specific `examples` field\u202f[2][5].\n\nSo, to show example request data in the docs UI, define `examples` (or `openapi_examples` for full UI support) when declaring the `Body()` parameter."
+      },
+      {
+        "id": "sse",
+        "type": "factual",
+        "label": "ok",
+        "grade": {
+          "faithfulness": 5,
+          "relevance": 5,
+          "correctness": 5,
+          "citations_ok": true,
+          "refused": false,
+          "reason": "The answer accurately covers all key facts (yield, response_class=EventSourceResponse) and is fully supported by the provided sources with correct citations."
+        },
+        "search_query": "How do I stream server-sent events from an endpoint?",
+        "cited": [
+          1,
+          3,
+          4
+        ],
+        "sources": [
+          "tutorial-server-sent-events.md",
+          "tutorial-server-sent-events.md",
+          "tutorial-server-sent-events.md",
+          "tutorial-server-sent-events.md",
+          "tutorial-server-sent-events.md"
+        ],
+        "timings": {
+          "search_ms": 803,
+          "rerank_ms": 15558,
+          "generate_ms": 1536
+        },
+        "answer": "You can stream SSE from a FastAPI endpoint by **yielding** items inside the path\u2011operation function and telling FastAPI to use the SSE response class.\n\n**Steps**\n\n1. **Import the response class**  \n   ```python\n   from fastapi.sse import EventSourceResponse\n   ```  \n   (FastAPI added this in version\u202f0.135.0)[1]  \n\n2. **Create a path\u2011operation that yields data**  \n   * Use `async def` (or a regular `def`) and `yield` each item you want to send.  \n   * Set `response_class=EventSourceResponse` on the decorator.  \n\n   ```python\n   @app.get(\"/stream\", response_class=EventSourceResponse)\n   async def stream_items() -> AsyncIterable[Item]:\n       async for item in get_items():\n           yield item          # each item becomes a JSON\u2011encoded `data:` field\n   ```\n   FastAPI will automatically encode each yielded value as JSON and send it in the `data:` field of an SSE event[3].\n\n3. **Return\u2011type hints (optional but recommended)**  \n   * Declare `AsyncIterable[Item]` (or `Iterable[Item]` for a non\u2011async function) so FastAPI can **validate**, **document**, and **serialize** the data with Pydantic[3].  \n   * If you omit the return type, FastAPI falls back to `jsonable_encoder` to convert the data[4].\n\n4. **Non\u2011async version** (if you prefer a regular function)  \n\n   ```python\n   @app.get(\"/stream\", response_class=EventSourceResponse)\n   def stream_items() -> Iterable[Item]:\n       for item in get_items():\n           yield item\n   ```\n   FastAPI ensures the generator runs without blocking the event loop[3].\n\n5. **Custom SSE fields (optional)**  \n   If you need to set `event`, `id`, `retry`, or a comment, yield a `ServerSentEvent` object instead of plain data (import from `fastapi.sse`)[4].\n\nThat\u2019s all you need to stream server\u2011sent events from a FastAPI endpoint!"
+      },
+      {
+        "id": "fu-required-query",
+        "type": "followup",
+        "label": "ok",
+        "grade": {
+          "faithfulness": 5,
+          "relevance": 5,
+          "correctness": 5,
+          "citations_ok": true,
+          "refused": false,
+          "reason": "The answer correctly identifies that omitting the default value makes the parameter required, supported by sources [1], [2], and [3]."
+        },
+        "search_query": "How to make a query parameter required in FastAPI",
+        "cited": [
+          1,
+          2,
+          3
+        ],
+        "sources": [
+          "tutorial-query-params.md",
+          "tutorial-query-params-str-validations.md",
+          "tutorial-query-params.md",
+          "tutorial-query-params-str-validations.md",
+          "tutorial-query-params.md"
+        ],
+        "timings": {
+          "rewrite_ms": 1420,
+          "search_ms": 859,
+          "rerank_ms": 15539,
+          "generate_ms": 902
+        },
+        "answer": "To make a query parameter **required**, simply declare it **without a default value**.  \n\n- If you write the parameter as a plain function argument, FastAPI treats it as required:\n\n```python\ndef read_items(needy: str):\n    ...\n```\n\n- When you use the `Query` helper (or `Annotated` with `Query`), also omit the default:\n\n```python\nfrom fastapi import Query\nfrom typing import Annotated\n\ndef read_items(\n    needy: Annotated[str, Query(min_length=3)]   # no \u201c= \u2026\u201d\n):\n    ...\n```\n\nBecause there is no default, FastAPI will return a validation error if the client does not supply the parameter in the URL\u202f\u2014\u202fe.g., `?needy=...`\u202f[1][2][3]."
+      },
+      {
+        "id": "id-last-event-id",
+        "type": "factual",
+        "label": "false_refusal",
+        "grade": {
+          "faithfulness": 5,
+          "relevance": 1,
+          "correctness": 1,
+          "citations_ok": true,
+          "refused": true,
+          "reason": "The answer refuses to answer despite Source [1] explicitly stating that Last-Event-ID is used to resume the stream from where the client left off."
+        },
+        "search_query": "What is Last-Event-ID used for?",
+        "cited": [],
+        "sources": [
+          "tutorial-server-sent-events.md",
+          "tutorial-server-sent-events.md",
+          "tutorial-server-sent-events.md",
+          "tutorial-server-sent-events.md",
+          "tutorial-server-sent-events.md"
+        ],
+        "timings": {
+          "search_ms": 1080,
+          "rerank_ms": 15511,
+          "generate_ms": 614
+        },
+        "answer": "I couldn't find an explanation of **Last\u2011Event\u2011ID** in the FastAPI documentation excerpts you provided. If you\u2019d like, I can help with details about how FastAPI handles SSE fields like `event`, `id`, or `retry`, or show how to use `ServerSentEvent` objects in your streams. Let me know!"
+      }
+    ]
+  },
+  "rerank_calls": 6,
+  "rerank_failures": 0
+}

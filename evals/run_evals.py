@@ -41,6 +41,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from generate import answer_question, rewrite_query  # noqa: E402
 from llm import ANSWER_MODEL, FAST_MODEL, JUDGE_MODEL, complete  # noqa: E402
+from rerank import stats as rerank_stats  # noqa: E402
 from retrieve import embed_query, retrieve  # noqa: E402
 
 GOLDEN = Path(__file__).parent / "golden.jsonl"
@@ -69,8 +70,10 @@ Return JSON with exactly these fields:
 Judge only against the sources and key facts given, not your own knowledge."""
 
 
-def load_cases(limit: int | None) -> list[dict]:
+def load_cases(limit: int | None, ids: list[str] | None = None) -> list[dict]:
     cases = [json.loads(line) for line in GOLDEN.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if ids:
+        cases = [c for c in cases if c["id"] in ids]
     return cases[:limit] if limit else cases
 
 
@@ -79,6 +82,11 @@ def first_hit_rank(sources: list[str], expected: list[str]) -> int | None:
         if source in expected:
             return rank
     return None
+
+
+def slice_of(case: dict) -> str:
+    """Question category: standard, paraphrase, identifier or followup."""
+    return case.get("slice") or ("followup" if case["type"] == "followup" else "standard")
 
 
 def summarize(ranks: list[int | None]) -> dict:
@@ -96,6 +104,7 @@ def summarize(ranks: list[int | None]) -> dict:
 def run_retrieval(cases: list[dict]) -> dict:
     cases = [c for c in cases if c["type"] != "unanswerable"]
     ranks: dict[str, list] = {name: [] for name in RETRIEVAL_CONFIGS}
+    by_slice: dict[str, dict[str, list]] = {}
     per_case = []
     followup_raw, followup_rewritten = [], []
 
@@ -110,6 +119,7 @@ def run_retrieval(cases: list[dict]) -> dict:
             results = retrieve(query, top_k=TOP_K, query_vector=vector, **config)
             rank = first_hit_rank([r["source"] for r in results], case["expected_sources"])
             ranks[name].append(rank)
+            by_slice.setdefault(slice_of(case), {n: [] for n in RETRIEVAL_CONFIGS})[name].append(rank)
             row["ranks"][name] = rank
         per_case.append(row)
 
@@ -123,6 +133,10 @@ def run_retrieval(cases: list[dict]) -> dict:
 
     return {
         "configs": {name: summarize(r) for name, r in ranks.items()},
+        "slices": {
+            slice_name: {name: summarize(r) for name, r in configs.items()}
+            for slice_name, configs in by_slice.items()
+        },
         "followups": {
             "raw question": summarize(followup_raw),
             "rewritten with history": summarize(followup_rewritten),
@@ -237,6 +251,12 @@ def to_markdown(report: dict) -> str:
         f"`{FAST_MODEL}` · judge `{JUDGE_MODEL}`",
         "",
     ]
+    if report.get("rerank_failures"):
+        lines += [
+            f"> **Warning:** {report['rerank_failures']} of {report['rerank_calls']} rerank calls failed "
+            "and fell back to hybrid order, so rerank numbers understate it. Re-run when rate limits reset.",
+            "",
+        ]
     if "retrieval" in report:
         r = report["retrieval"]
         n = next(iter(r["configs"].values()))["n"]
@@ -247,6 +267,14 @@ def to_markdown(report: dict) -> str:
             "|---|---|---|---|",
             *[f"| {name} | {pct(m['hit@1'])} | {pct(m['hit@5'])} | {m['mrr@5']:.3f} |"
               for name, m in r["configs"].items()],
+            "",
+            "**By question type** (MRR@5 - higher means the right doc ranks nearer the top):",
+            "",
+            "| Question type | n | " + " | ".join(RETRIEVAL_CONFIGS) + " |",
+            "|---|---|" + "---|" * len(RETRIEVAL_CONFIGS),
+            *[f"| {slice_name} | {next(iter(configs.values()))['n']} | "
+              + " | ".join(f"{configs[name]['mrr@5']:.3f}" for name in RETRIEVAL_CONFIGS) + " |"
+              for slice_name, configs in r["slices"].items()],
             "",
             f"**Conversation memory** ({r['followups']['raw question']['n']} follow-up questions, hybrid + rerank):",
             "",
@@ -288,11 +316,12 @@ def main():
     parser.add_argument("--retrieval", action="store_true", help="run the retrieval suite")
     parser.add_argument("--generation", action="store_true", help="run the LLM-judged generation suite")
     parser.add_argument("--limit", type=int, help="only use the first N questions")
+    parser.add_argument("--ids", help="comma-separated question ids to run, e.g. to re-test failures")
     args = parser.parse_args()
     if not (args.retrieval or args.generation):
         parser.error("choose --retrieval and/or --generation")
 
-    cases = load_cases(args.limit)
+    cases = load_cases(args.limit, args.ids.split(",") if args.ids else None)
     report: dict = {"run_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
     started = time.time()
 
@@ -303,9 +332,14 @@ def main():
         print("Generation suite:")
         report["generation"] = run_generation(cases)
 
+    report["rerank_calls"] = rerank_stats["calls"]
+    report["rerank_failures"] = rerank_stats["failures"]
+
     RESULTS_DIR.mkdir(exist_ok=True)
     markdown = to_markdown(report)
     suites = "-".join(k for k in ("retrieval", "generation") if k in report)
+    if args.ids:
+        suites += "-subset"  # don't overwrite the full-run results
     (RESULTS_DIR / f"latest-{suites}.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     (RESULTS_DIR / f"latest-{suites}.md").write_text(markdown, encoding="utf-8")
 

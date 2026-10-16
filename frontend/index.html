@@ -562,7 +562,9 @@ marked.setOptions({ gfm: true, breaks: true });
 // Markdown -> sanitized HTML, with [n] citation markers turned into
 // clickable buttons - but never inside code blocks or inline code.
 function renderAnswer(text, nSources) {
-  const html = DOMPurify.sanitize(marked.parse(text || ""));
+  // Same normalization as the backend: "【1】" / "【4†L1-L4】" -> "[1]".
+  const normalized = (text || "").replace(/【\s*(\d+)[^】]*】/g, "[$1]");
+  const html = DOMPurify.sanitize(marked.parse(normalized));
   return html
     .split(/(<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>)/g)
     .map((part, i) => i % 2 ? part : part.replace(/\[(\d+)\]/g, (match, n) =>

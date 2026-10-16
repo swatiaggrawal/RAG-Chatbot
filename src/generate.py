@@ -37,7 +37,7 @@ SYSTEM_PROMPT = """You are FastAPI Docs Copilot, a friendly, upbeat assistant th
 
 Rules:
 - Stay grounded: every fact must come from the sources. If they don't cover the question, say so kindly (e.g. "I couldn't find that in the FastAPI docs I have"), then suggest a related topic you can help with. Never make things up.
-- Cite your sources inline with their numbers in square brackets, like [1] or [2][3], right after the sentence they support. Only cite numbers that appear in the sources.
+- Cite your sources inline with their numbers in plain square brackets, like [1] or [2][3], right after the sentence they support. Only cite numbers that appear in the sources. Never use other citation styles such as 【1】 or line ranges.
 - Be warm and conversational, like a helpful teammate, but get to the point - no filler.
 - Format with Markdown: short paragraphs, bullet points for lists, **bold** for key terms, and fenced ```python code blocks when showing code from the sources.
 - Use the earlier conversation to understand follow-up questions.
@@ -63,6 +63,16 @@ SMALL_TALK_RE = re.compile(
 )
 
 CITATION_RE = re.compile(r"\[(\d+)\]")
+# gpt-oss models sometimes fall back to their training-time citation style,
+# e.g. "【1】" or "【4†L1-L4】" - found by the eval harness, where these
+# made answers look uncited. Normalized to [n] before anything else.
+ALT_CITATION_RE = re.compile(r"【\s*(\d+)[^】]*】")
+
+
+def normalize_citations(text: str) -> str:
+    return ALT_CITATION_RE.sub(r"[\1]", text)
+
+_rewrite_cache: dict[tuple, str] = {}
 
 
 def clean_history(history: list[dict] | None) -> list[dict]:
@@ -84,6 +94,9 @@ def rewrite_query(question: str, history: list[dict]) -> str:
         return question
 
     transcript = "\n".join(f"{m['role']}: {m['content'][:500]}" for m in history)
+    key = (transcript, question)
+    if key in _rewrite_cache:
+        return _rewrite_cache[key]
     try:
         rewritten = complete(
             [
@@ -99,7 +112,10 @@ def rewrite_query(question: str, history: list[dict]) -> str:
         return question
 
     rewritten = rewritten.strip().strip('"').splitlines()[0][:300] if rewritten.strip() else ""
-    return rewritten or question
+    if len(_rewrite_cache) > 256:
+        _rewrite_cache.clear()
+    _rewrite_cache[key] = rewritten or question
+    return _rewrite_cache[key]
 
 
 def build_prompt(question: str, chunks: list[dict]) -> str:
@@ -172,7 +188,7 @@ def answer_question(question: str, history: list[dict] | None = None, top_k: int
     """
     prep = prepare(question, history, top_k)
     started = time.perf_counter()
-    answer = complete(prep["messages"])
+    answer = normalize_citations(complete(prep["messages"]))
     prep["timings"]["generate_ms"] = round((time.perf_counter() - started) * 1000)
 
     return {
@@ -212,7 +228,10 @@ def stream_answer(question: str, history: list[dict] | None = None, top_k: int =
     timings = {**prep["timings"], "generate_ms": round((time.perf_counter() - started) * 1000)}
     if first_token_ms is not None:
         timings["first_token_ms"] = first_token_ms
-    yield "done", {"cited": cited_ids("".join(parts), len(prep["chunks"])), "timings": timings}
+    # Tokens are streamed raw (a marker can be split across tokens); the
+    # client applies the same normalization when rendering.
+    answer = normalize_citations("".join(parts))
+    yield "done", {"cited": cited_ids(answer, len(prep["chunks"])), "timings": timings}
 
 
 if __name__ == "__main__":

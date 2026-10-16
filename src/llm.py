@@ -17,6 +17,7 @@ regularly - see https://console.groq.com/docs/deprecations
 
 import os
 import re
+import time
 
 import groq
 from dotenv import load_dotenv
@@ -33,6 +34,18 @@ FAST_MODEL = os.environ.get("GROQ_FAST_MODEL", "openai/gpt-oss-20b")
 JUDGE_MODEL = os.environ.get("GROQ_JUDGE_MODEL", "qwen/qwen3.8-27b")
 
 THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+# When a model's *daily* quota runs out, retrying is pointless for hours,
+# so switch to a backup model instead - each Groq model has its own quota.
+# Without this, the reranker silently degraded to plain hybrid order for
+# the rest of the day once gpt-oss-20b hit its 200K tokens/day limit.
+FALLBACKS = {
+    "openai/gpt-oss-120b": "openai/gpt-oss-20b",
+    "openai/gpt-oss-20b": "qwen/qwen3.8-27b",
+    "qwen/qwen3.8-27b": "openai/gpt-oss-20b",
+}
+EXHAUSTED_COOLDOWN_S = 15 * 60
+_exhausted_until: dict[str, float] = {}
 
 
 def _params(model: str, max_tokens: int, temperature: float) -> dict:
@@ -58,6 +71,31 @@ def _create(messages: list[dict], params: dict, **extra):
         return client.chat.completions.create(messages=messages, **params, **extra)
 
 
+def _is_daily_limit(error: Exception) -> bool:
+    return isinstance(error, groq.RateLimitError) and any(
+        marker in str(error) for marker in ("tokens per day", "requests per day", "(TPD)", "(RPD)")
+    )
+
+
+def _with_fallback(call, model: str):
+    """Runs call(model), moving down FALLBACKS while models are out of daily quota."""
+    tried = []
+    while model and model not in tried:
+        tried.append(model)
+        if _exhausted_until.get(model, 0) > time.time():
+            model = FALLBACKS.get(model)
+            continue
+        try:
+            return call(model)
+        except groq.RateLimitError as e:
+            if not _is_daily_limit(e):
+                raise
+            _exhausted_until[model] = time.time() + EXHAUSTED_COOLDOWN_S
+            print(f"[llm] {model} is out of daily quota, falling back to {FALLBACKS.get(model)}")
+            model = FALLBACKS.get(model)
+    raise RuntimeError(f"All models are out of daily quota: {tried}")
+
+
 def complete(
     messages: list[dict],
     model: str = ANSWER_MODEL,
@@ -66,7 +104,9 @@ def complete(
     json_mode: bool = False,
 ) -> str:
     extra = {"response_format": {"type": "json_object"}} if json_mode else {}
-    response = _create(messages, _params(model, max_tokens, temperature), **extra)
+    response = _with_fallback(
+        lambda m: _create(messages, _params(m, max_tokens, temperature), **extra), model
+    )
     return THINK_RE.sub("", response.choices[0].message.content or "").strip()
 
 
@@ -77,7 +117,10 @@ def stream(
     temperature: float = 0.3,
 ):
     """Yields the answer text as it's generated (reasoning tokens excluded)."""
-    for chunk in _create(messages, _params(model, max_tokens, temperature), stream=True):
+    chunks = _with_fallback(
+        lambda m: _create(messages, _params(m, max_tokens, temperature), stream=True), model
+    )
+    for chunk in chunks:
         delta = chunk.choices[0].delta.content if chunk.choices else None
         if delta:
             yield delta
