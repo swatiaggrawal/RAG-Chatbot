@@ -14,15 +14,17 @@ reduces (not eliminates) hallucination.
 import os
 import sys
 from dotenv import load_dotenv
-from google import genai
+from groq import Groq
 
 from retrieve import retrieve
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 load_dotenv()
 
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-GEMINI_MODEL = "gemini-3.6-flash"  # current stable Flash model (as of mid-2026), free-tier friendly
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+# Groq's free tier covers this model; override via GROQ_MODEL in .env
+# (e.g. "llama-3.1-8b-instant" for higher free-tier rate limits).
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 SYSTEM_PROMPT = """You are a helpful assistant that answers questions using ONLY the context provided below.
 
@@ -58,17 +60,17 @@ def answer_question(question: str, top_k: int = 4) -> dict:
 
     prompt = build_prompt(question, chunks)
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config={
-            "system_instruction": SYSTEM_PROMPT,
-            "max_output_tokens": 4096,  # generous ceiling so the visible answer can't
-                                          # get starved out by internal "thinking" tokens
-        },
+    response = client.chat.completions.create(
+        model=GROQ_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=1024,
+        temperature=0.2,  # low temperature keeps answers close to the context
     )
 
-    answer_text = response.text
+    answer_text = response.choices[0].message.content
     sources = list({c["source"] for c in chunks})  # dedupe
 
     return {"answer": answer_text, "sources": sources}

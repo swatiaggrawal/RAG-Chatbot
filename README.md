@@ -34,7 +34,7 @@ Your documents (.txt, .pdf)
         │               not naive fixed-character splitting) + Unicode
         │               normalization (fixes PDF ligature artifacts)
         ▼
-   embed_store.py    →  Gemini API embeddings, stored in Pinecone
+   embed_store.py    →  Pinecone-hosted embeddings, stored in Pinecone
         │               (managed vector DB), batched to respect both
         │               the API's and Pinecone's insert/request limits
         ▼
@@ -42,7 +42,7 @@ Your documents (.txt, .pdf)
         │               question, returns the top-k most relevant chunks
         ▼
    generate.py       →  builds a grounded prompt (context + question),
-        │               calls Gemini, returns an answer + which source
+        │               calls Groq, returns an answer + which source  
         │               documents it actually used
         ▼
    api.py            →  FastAPI wrapper exposing /chat over HTTP
@@ -59,9 +59,9 @@ useful for debugging retrieval quality without involving the LLM at all.
 
 | Layer | Choice | Why |
 |---|---|---|
-| Embeddings | Gemini API (`gemini-embedding-001`) | Keeps the deployed backend lightweight — a local model (sentence-transformers + torch) needs 300-500MB+ RAM just to load, which exceeds free-tier hosting limits like Render's 512MB cap |
+| Embeddings | Pinecone Inference (`llama-text-embed-v2`, 768-dim) | Keeps the deployed backend lightweight — a local model (sentence-transformers + torch) needs 300-500MB+ RAM just to load, which exceeds free-tier hosting limits like Render's 512MB cap |
 | Vector store | Pinecone | Managed, serverless vector DB — no infra to provision or persist locally, scales past single-instance disk limits |
-| LLM | Gemini (`gemini-3.6-flash`) | Fast, strong free/low-cost tier for iterating on prompts without burning budget |
+| LLM | Groq (`llama-3.3-70b-versatile`) | Very fast inference with a free tier, so iterating on prompts costs nothing |
 | Backend | FastAPI | Thin wrapper — no RAG logic lives here, just HTTP plumbing |
 | Frontend | React (CDN, no build step) | Full React component model without adding a Node/npm toolchain to the project |
 
@@ -75,11 +75,12 @@ useful for debugging retrieval quality without involving the LLM at all.
   This started with local `sentence-transformers` embeddings, which
   work fine for development but pulled in `torch` as a dependency —
   loading that model alone exceeded the 512MB RAM cap on Render's free
-  tier. Switched to Gemini's embedding API instead, which removes the
-  heavy local dependency entirely at the cost of a small per-batch API
-  call. Query-side and document-side embeddings use matched
-  `task_type` values (`RETRIEVAL_QUERY` vs `RETRIEVAL_DOCUMENT`), which
-  Gemini's asymmetric embeddings expect for good retrieval quality.
+  tier. Switched to Pinecone's hosted embedding API instead, which
+  removes the heavy local dependency entirely at the cost of a small
+  per-batch API call, and needs no key beyond the Pinecone one.
+  Query-side and document-side embeddings use matched `input_type`
+  values (`query` vs `passage`), which the asymmetric embedding model
+  expects for good retrieval quality.
 - **Pinecone over a local vector store.** Started with Chroma for local
   persistence; moved to Pinecone's managed/serverless offering to avoid
   bundling and persisting a local index file in the deployment
@@ -113,7 +114,7 @@ pip install -r requirements.txt
 
 cp .env.example .env
 # edit .env and add:
-#   GEMINI_API_KEY   (free at https://aistudio.google.com/apikey)
+#   GROQ_API_KEY     (free at https://console.groq.com/keys)
 #   PINECONE_API_KEY (free at https://app.pinecone.io)
 ```
 

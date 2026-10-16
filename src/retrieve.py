@@ -2,7 +2,7 @@
 STAGE 3: RETRIEVE
 -------------------
 Job: given a user's question, embed it with the SAME embedding model
-used for the chunks (Gemini's embedding API), then ask Pinecone for
+used for the chunks (Pinecone's hosted llama-text-embed-v2), then ask Pinecone for
 the most similar stored vectors.
 
 This file is deliberately runnable on its own (see __main__ below) so
@@ -14,30 +14,20 @@ the LLM literally never sees the right information.
 """
 
 import sys
-from google.genai import types
-
-from embed_store import genai_client, get_index, EMBEDDING_MODEL, EMBEDDING_DIM
+from embed_store import embed, get_index
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def embed_query(query: str) -> list[float]:
     """
-    Embeds a single search query via Gemini. task_type=RETRIEVAL_QUERY
-    (as opposed to RETRIEVAL_DOCUMENT used when storing chunks) tells
-    the model this text is a search query, not a document - Gemini's
-    embeddings are asymmetric, so matching this to embed_store.py's
-    task_type is what makes retrieval actually work well.
+    Embeds a single search query. input_type="query" (as opposed to
+    "passage" used when storing chunks) tells the model this text is a
+    search query, not a document - the embeddings are asymmetric, so
+    matching this to embed_store.py's input_type is what makes
+    retrieval actually work well.
     """
-    response = genai_client.models.embed_content(
-        model=EMBEDDING_MODEL,
-        contents=[query],
-        config=types.EmbedContentConfig(
-            task_type="RETRIEVAL_QUERY",
-            output_dimensionality=EMBEDDING_DIM,
-        ),
-    )
-    return response.embeddings[0].values
+    return embed([query], input_type="query")[0]
 
 
 def retrieve(query: str, top_k: int = 4) -> list[dict]:

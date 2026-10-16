@@ -14,9 +14,11 @@ Pinecone's actual vector search runs on Pinecone's own servers, the
 Render container only ever makes plain HTTP calls to it - removing
 that whole class of native-dependency crash.
 
-Embeddings themselves still come from the Gemini API rather than a
-local model, for the same memory reason as before (no torch/local
-model weights needed on the deployed backend).
+Embeddings come from Pinecone's hosted inference API
+(llama-text-embed-v2) rather than a local model, for the same memory
+reason as before (no torch/local model weights needed on the deployed
+backend). This also means the only keys needed are Pinecone's (for
+embeddings + storage) and Groq's (for generation).
 
 This is a one-time step (rerun only when your documents change) -
 that's why it's a separate file from retrieval, which runs on every
@@ -26,26 +28,26 @@ single user query.
 import os
 import time
 from pinecone import Pinecone, ServerlessSpec
-from google import genai
-from google.genai import types
 from dotenv import load_dotenv
 
 from ingest import ingest_all
 
 load_dotenv()
 
-genai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
 
-EMBEDDING_MODEL = "gemini-embedding-001"
-# 768 dimensions is Google's suggested size for retrieval use cases -
+EMBEDDING_MODEL = "llama-text-embed-v2"
+# llama-text-embed-v2 supports 384/512/768/1024/2048 dimensions -
 # this MUST match the index's configured dimension below.
 EMBEDDING_DIM = 768
 
-INDEX_NAME = "rag-chatbot-fastapi-docs"
+# New index name: vectors from a different embedding model live in a
+# different vector space, so the old Gemini-embedded index can't be
+# reused. A fresh name makes api.py rebuild the index on first boot.
+INDEX_NAME = "rag-chatbot-fastapi-docs-v2"
 
-# Gemini's embed_content endpoint caps input batches at 100 strings per call.
-EMBED_BATCH_SIZE = 100
+# Pinecone's inference endpoint caps input batches at 96 strings per call.
+EMBED_BATCH_SIZE = 96
 # Pinecone recommends keeping upsert batches in the 100-500 range for
 # a good balance of throughput and reliability.
 UPSERT_BATCH_SIZE = 100
@@ -75,14 +77,30 @@ def get_index():
     return pc.Index(INDEX_NAME)
 
 
+def embed(texts: list[str], input_type: str) -> list[list[float]]:
+    """
+    Single call to Pinecone's hosted embedding model. input_type is
+    "passage" for documents being stored and "query" for search
+    queries - the model is asymmetric, so matching this correctly on
+    both the storage side (here) and the query side (retrieve.py)
+    meaningfully improves retrieval quality.
+    """
+    response = pc.inference.embed(
+        model=EMBEDDING_MODEL,
+        inputs=texts,
+        parameters={
+            "input_type": input_type,
+            "truncate": "END",
+            "dimension": EMBEDDING_DIM,
+        },
+    )
+    return [e["values"] for e in response]
+
+
 def embed_texts(texts: list[str]) -> list[list[float]]:
     """
-    Embeds a list of texts via the Gemini API, batching to stay under
-    the API's per-call limit. task_type=RETRIEVAL_DOCUMENT tells the
-    model these are documents to be searched (as opposed to a query
-    searching them) - Gemini's embeddings are asymmetric, so matching
-    this correctly on both the storage side (here) and the query side
-    (retrieve.py) meaningfully improves retrieval quality.
+    Embeds a list of document chunks, batching to stay under the
+    API's per-call limit.
 
     Includes retry-with-backoff on rate limit (429) errors.
     """
@@ -94,19 +112,11 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
         for attempt in range(max_retries):
             try:
-                response = genai_client.models.embed_content(
-                    model=EMBEDDING_MODEL,
-                    contents=batch,
-                    config=types.EmbedContentConfig(
-                        task_type="RETRIEVAL_DOCUMENT",
-                        output_dimensionality=EMBEDDING_DIM,
-                    ),
-                )
-                all_embeddings.extend([e.values for e in response.embeddings])
+                all_embeddings.extend(embed(batch, input_type="passage"))
                 print(f"  embedded batch {i // EMBED_BATCH_SIZE + 1} ({min(i + EMBED_BATCH_SIZE, len(texts))}/{len(texts)})")
                 break
             except Exception as e:
-                if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
+                if "429" in str(e) or "rate limit" in str(e).lower():
                     wait_time = 20 * (attempt + 1)
                     print(f"  Rate limited - waiting {wait_time}s before retry ({attempt + 1}/{max_retries})...")
                     time.sleep(wait_time)
@@ -115,7 +125,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
         else:
             raise RuntimeError(
                 f"Failed to embed batch starting at index {i} after {max_retries} retries. "
-                "Check your quota/billing at https://ai.dev/rate-limit"
+                "Check your usage at https://app.pinecone.io"
             )
 
         time.sleep(2)
@@ -125,7 +135,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
 def embed_and_store():
     """
-    Full pipeline: ingest chunks -> embed them via Gemini -> upsert
+    Full pipeline: ingest chunks -> embed them via Pinecone -> upsert
     into Pinecone. Run this once after adding/changing documents in
     data/. Pinecone stores the vector + metadata (source, text)
     together, so retrieval can pull the actual chunk text back out
@@ -136,7 +146,7 @@ def embed_and_store():
         return
 
     texts = [c["text"] for c in chunks]
-    print(f"Embedding {len(texts)} chunks via Gemini API...")
+    print(f"Embedding {len(texts)} chunks via Pinecone inference...")
     embeddings = embed_texts(texts)
 
     index = get_index()
