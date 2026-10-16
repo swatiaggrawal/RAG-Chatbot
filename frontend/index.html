@@ -303,19 +303,6 @@
 
   .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 9px; }
 
-  .source-tag {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    color: #a5f3fc;
-    background: rgba(34, 211, 238, 0.08);
-    border: 1px solid rgba(34, 211, 238, 0.3);
-    border-radius: 6px;
-    padding: 3px 8px;
-    animation: pop 0.35s cubic-bezier(.2,1.4,.4,1) both;
-    transition: box-shadow 0.2s, border-color 0.2s;
-  }
-  .source-tag:hover { border-color: var(--cyan); box-shadow: var(--glow); }
-  .source-tag::before { content: "◆ "; color: var(--violet); }
   @keyframes pop { from { opacity: 0; transform: scale(0.6); } }
 
   .copy-btn {
@@ -408,6 +395,111 @@
   @keyframes fade-up { from { opacity: 0; transform: translateY(16px); } }
   @keyframes fade-down { from { opacity: 0; transform: translateY(-12px); } }
 
+  /* citations */
+  .cite {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 500;
+    vertical-align: super;
+    line-height: 1;
+    margin: 0 1px;
+    padding: 2px 5px;
+    border-radius: 5px;
+    border: 1px solid rgba(34, 211, 238, 0.45);
+    background: rgba(34, 211, 238, 0.12);
+    color: #a5f3fc;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  }
+  .cite:hover, .cite:focus-visible { background: var(--cyan); color: #05060f; box-shadow: var(--glow); outline: none; }
+
+  .search-note {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin: 0 0 6px 2px;
+  }
+  .search-note::before { content: "⌕ "; color: var(--cyan); }
+
+  .sources-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+
+  .source-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(5, 6, 15, 0.55);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    animation: pop 0.35s cubic-bezier(.2,1.4,.4,1) both;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .source-card.active { border-color: rgba(34, 211, 238, 0.6); box-shadow: var(--glow); }
+
+  .source-head { display: flex; align-items: center; gap: 8px; padding: 2px 10px 2px 2px; }
+
+  .source-toggle {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center; gap: 9px;
+    background: none; border: none; color: var(--text);
+    font: inherit; font-size: 13px; text-align: left;
+    padding: 7px 8px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .source-toggle:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+
+  .source-num {
+    flex: none;
+    width: 20px; height: 20px; border-radius: 6px;
+    display: grid; place-items: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    background: var(--grad); color: #05060f;
+  }
+  .source-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+  .source-file {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 2;
+  }
+
+  .source-link {
+    flex: none;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--cyan); text-decoration: none;
+    padding: 3px 7px; border-radius: 6px; border: 1px solid transparent;
+  }
+  .source-link:hover, .source-link:focus-visible { border-color: rgba(34, 211, 238, 0.4); outline: none; }
+
+  .source-snippet {
+    margin: 0 12px 12px 38px;
+    padding-left: 10px;
+    border-left: 2px solid var(--violet);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-dim);
+    white-space: pre-wrap;
+    max-height: 220px;
+    overflow-y: auto;
+    animation: fade-up 0.25s ease both;
+  }
+
+  .timings { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); opacity: 0.8; margin-right: 4px; }
+
+  .new-chat {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .new-chat:hover:not(:disabled), .new-chat:focus-visible { border-color: var(--cyan); box-shadow: var(--glow); outline: none; }
+  .new-chat:disabled { opacity: 0.4; cursor: not-allowed; }
+
   @media (max-width: 600px) {
     header p { display: none; }
     header h1 { font-size: 15px; }
@@ -419,6 +511,9 @@
     .core .ring.r2 { inset: 9px; }
     .core .heart { inset: 22px; }
     .chip { font-size: 13px; padding: 8px 14px; }
+    .source-file { display: none; }
+    .new-chat { padding: 6px 9px; }
+    .status { padding: 6px 8px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -437,9 +532,9 @@
 <script type="text/babel">
 const { useState, useRef, useEffect } = React;
 
-// Change this if your API runs somewhere other than localhost:8000
-// (e.g. update to your deployed Render/HF Spaces URL once deployed)
-const API_URL = "https://rag-chatbot-s2r2.onrender.com";
+// The deployed backend. For local development, open the page with
+// ?api=http://localhost:8000 to point it at your own server instead.
+const API_URL = new URLSearchParams(location.search).get("api") || "https://rag-chatbot-s2r2.onrender.com";
 
 const SUGGESTIONS = [
   "How do path parameters work?",
@@ -448,14 +543,63 @@ const SUGGESTIONS = [
   "How do I test my app?",
 ];
 
-const THINKING_STEPS = ["Scanning the docs", "Retrieving relevant chunks", "Composing an answer"];
+const THINKING_STEPS = ["Understanding your question", "Searching the docs", "Ranking the best passages"];
 
-const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// The server is stateless: the last few messages are sent with each
+// question so follow-ups ("and what about headers?") have context.
+const HISTORY_MESSAGES = 6;
+
+const TIMING_LABELS = {
+  rewrite_ms: "rewrite",
+  search_ms: "search",
+  rerank_ms: "rerank",
+  first_token_ms: "first token",
+  generate_ms: "answer",
+};
 
 marked.setOptions({ gfm: true, breaks: true });
 
-function renderMarkdown(text) {
-  return { __html: DOMPurify.sanitize(marked.parse(text || "")) };
+// Markdown -> sanitized HTML, with [n] citation markers turned into
+// clickable buttons - but never inside code blocks or inline code.
+function renderAnswer(text, nSources) {
+  // Same normalization as the backend: "【1】" / "【4†L1-L4】" -> "[1]".
+  const normalized = (text || "").replace(/【\s*(\d+)[^】]*】/g, "[$1]");
+  const html = DOMPurify.sanitize(marked.parse(normalized));
+  return html
+    .split(/(<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>)/g)
+    .map((part, i) => i % 2 ? part : part.replace(/\[(\d+)\]/g, (match, n) =>
+      Number(n) >= 1 && Number(n) <= nSources
+        ? `<button class="cite" data-cite="${n}" aria-label="Show source ${n}">${n}</button>`
+        : match))
+    .join("");
+}
+
+function formatMs(ms) {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+}
+
+// Minimal Server-Sent Events reader for a POST response (the browser's
+// EventSource only supports GET).
+async function* readEvents(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    buffer += decoder.decode(value, { stream: true });
+    let end;
+    while ((end = buffer.indexOf("\n\n")) !== -1) {
+      const block = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      let event = "message", data = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (data) yield { event, data: JSON.parse(data) };
+    }
+  }
 }
 
 const BotIcon = () => (
@@ -471,27 +615,43 @@ const SendIcon = () => (
   </svg>
 );
 
-// Reveals an answer a few characters at a time for a typewriter effect.
-function TypedAnswer({ text, onDone, onTick }) {
-  const [shown, setShown] = useState(REDUCED_MOTION ? text.length : 0);
-
+function SourceCard({ source, open, onToggle }) {
+  const ref = useRef(null);
   useEffect(() => {
-    if (shown >= text.length) { onDone(); return; }
-    const step = Math.max(2, Math.ceil(text.length / 160));
-    const t = setTimeout(() => { setShown(n => Math.min(text.length, n + step)); onTick(); }, 14);
-    return () => clearTimeout(t);
-  }, [shown]);
+    if (open) ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [open]);
 
   return (
-    <div className="bubble">
-      <div className="md" dangerouslySetInnerHTML={renderMarkdown(text.slice(0, shown))} />
-      <span className="caret" />
+    <div ref={ref} className={`source-card ${open ? "active" : ""}`}>
+      <div className="source-head">
+        <button className="source-toggle" onClick={onToggle} aria-expanded={open}>
+          <span className="source-num">{source.id}</span>
+          <span className="source-title">{source.title}</span>
+          <span className="source-file">{source.source}</span>
+        </button>
+        {source.url && (
+          <a className="source-link" href={source.url} target="_blank" rel="noopener noreferrer"
+             aria-label={`Open "${source.title}" in the FastAPI docs`}>docs ↗</a>
+        )}
+      </div>
+      {open && <div className="source-snippet">{source.snippet}</div>}
     </div>
   );
 }
 
-function AssistantMessage({ msg, onTyped, onTick }) {
+function AssistantMessage({ msg }) {
+  const [openSource, setOpenSource] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  // Show the sources the answer actually cited; if it cited none (e.g. a
+  // refusal), fall back to everything that was retrieved.
+  const sources = msg.sources || [];
+  const shown = msg.cited?.length ? sources.filter(s => msg.cited.includes(s.id)) : sources;
+
+  function onBubbleClick(e) {
+    const id = Number(e.target.closest?.("[data-cite]")?.dataset.cite);
+    if (id) setOpenSource(current => current === id ? null : id);
+  }
 
   function copy() {
     navigator.clipboard?.writeText(msg.text).then(() => {
@@ -500,20 +660,35 @@ function AssistantMessage({ msg, onTyped, onTick }) {
     });
   }
 
+  const timings = Object.keys(TIMING_LABELS)
+    .filter(key => msg.timings?.[key] !== undefined)
+    .map(key => `${TIMING_LABELS[key]} ${formatMs(msg.timings[key])}`)
+    .join(" · ");
+
   return (
     <div className="message-row assistant">
       <div className="avatar"><BotIcon /></div>
       <div className="msg-body">
-        {msg.typing
-          ? <TypedAnswer text={msg.text} onDone={onTyped} onTick={onTick} />
-          : <div className="bubble"><div className="md" dangerouslySetInnerHTML={renderMarkdown(msg.text)} /></div>}
-        {!msg.typing && (
-          <div className="meta">
-            {(msg.sources || []).map((s, j) => (
-              <span key={j} className="source-tag" style={{ animationDelay: `${j * 70}ms` }}>{s}</span>
-            ))}
-            <button className="copy-btn" onClick={copy}>{copied ? "copied ✓" : "copy"}</button>
-          </div>
+        {msg.searchQuery && <div className="search-note">searched for “{msg.searchQuery}”</div>}
+        <div className="bubble" onClick={onBubbleClick}>
+          <div className="md" dangerouslySetInnerHTML={{ __html: renderAnswer(msg.text, sources.length) }} />
+          {msg.streaming && <span className="caret" />}
+        </div>
+        {!msg.streaming && (
+          <React.Fragment>
+            {shown.length > 0 && (
+              <div className="sources-panel">
+                {shown.map(s => (
+                  <SourceCard key={s.id} source={s} open={openSource === s.id}
+                              onToggle={() => setOpenSource(current => current === s.id ? null : s.id)} />
+                ))}
+              </div>
+            )}
+            <div className="meta">
+              {timings && <span className="timings">{timings}</span>}
+              <button className="copy-btn" onClick={copy}>{copied ? "copied ✓" : "copy"}</button>
+            </div>
+          </React.Fragment>
         )}
       </div>
     </div>
@@ -523,7 +698,7 @@ function AssistantMessage({ msg, onTyped, onTick }) {
 function Thinking({ slow }) {
   const [step, setStep] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setStep(s => (s + 1) % THINKING_STEPS.length), 1600);
+    const t = setInterval(() => setStep(s => (s + 1) % THINKING_STEPS.length), 1400);
     return () => clearInterval(t);
   }, []);
 
@@ -540,22 +715,33 @@ function Thinking({ slow }) {
   );
 }
 
+function updateLast(messages, change) {
+  const copy = messages.slice();
+  copy[copy.length - 1] = { ...copy[copy.length - 1], ...change(copy[copy.length - 1]) };
+  return copy;
+}
+
 function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState("idle"); // idle | searching | streaming
   const [slow, setSlow] = useState(false);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState("waking");
   const chatRef = useRef(null);
   const inputRef = useRef(null);
+  const busy = phase !== "idle";
 
-  function scrollToBottom(smooth = true) {
+  // Follow the answer as it streams, unless the user scrolled up to read.
+  useEffect(() => {
     const el = chatRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
-  }
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
-  useEffect(() => { if (messages.length) scrollToBottom(); }, [messages.length, loading]);
+  useEffect(() => {
+    const el = chatRef.current;
+    if (el && messages.length) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages.length, phase === "searching"]);
 
   // Ping the backend on load so the status light shows whether the
   // free-tier server is awake (and starts waking it up if it's asleep).
@@ -571,43 +757,68 @@ function App() {
 
   async function sendQuestion(text) {
     const question = (text ?? input).trim();
-    if (!question || loading) return;
+    if (!question || busy) return;
+
+    const history = messages
+      .filter(m => m.text && !m.streaming)
+      .slice(-HISTORY_MESSAGES)
+      .map(m => ({ role: m.role, content: m.text }));
 
     setError(null);
     setMessages(prev => [...prev, { role: "user", text: question }]);
     setInput("");
-    setLoading(true);
+    setPhase("searching");
     setSlow(false);
     const slowTimer = setTimeout(() => setSlow(true), 8000);
+    let started = false;
 
     try {
-      const res = await fetch(`${API_URL}/chat`, {
+      const res = await fetch(`${API_URL}/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question, history }),
       });
+      if (!res.ok || !res.body) throw new Error(`Server responded with ${res.status}`);
 
-      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
-
-      const data = await res.json();
-      setStatus("online");
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        text: data.answer,
-        sources: data.sources,
-        typing: true,
-      }]);
+      for await (const { event, data } of readEvents(res)) {
+        if (event === "meta") {
+          started = true;
+          clearTimeout(slowTimer);
+          setStatus("online");
+          setPhase("streaming");
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            text: "",
+            sources: data.sources,
+            cited: [],
+            timings: data.timings,
+            searchQuery: data.search_query && data.search_query !== question ? data.search_query : "",
+            streaming: true,
+          }]);
+        } else if (event === "token") {
+          setMessages(prev => updateLast(prev, m => ({ text: m.text + data.t })));
+        } else if (event === "done") {
+          setMessages(prev => updateLast(prev, () => ({ cited: data.cited, timings: data.timings, streaming: false })));
+        } else if (event === "error") {
+          throw new Error(data.message);
+        }
+      }
     } catch (err) {
-      setError("Couldn't get an answer from the server. It may still be waking up, so try again in a moment.");
+      if (started) setMessages(prev => updateLast(prev, () => ({ streaming: false })));
+      setError(started
+        ? "The answer was interrupted. Please try again."
+        : "Couldn't get an answer from the server. It may still be waking up, so try again in a moment.");
     } finally {
       clearTimeout(slowTimer);
-      setLoading(false);
+      setPhase("idle");
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }
 
-  function markTyped(i) {
-    setMessages(prev => prev.map((m, j) => (j === i ? { ...m, typing: false } : m)));
+  function newChat() {
+    setMessages([]);
+    setError(null);
+    inputRef.current?.focus();
   }
 
   const statusLabel = { online: "online", waking: "connecting", offline: "offline" }[status];
@@ -620,6 +831,9 @@ function App() {
           <h1>FASTAPI DOCS COPILOT</h1>
           <p>Answers grounded in FastAPI's official docs, with sources cited.</p>
         </div>
+        {messages.length > 0 && (
+          <button className="new-chat" onClick={newChat} disabled={busy}>+ new chat</button>
+        )}
         <div className={`status ${status}`}><span className="dot" />{statusLabel}</div>
       </header>
 
@@ -630,7 +844,8 @@ function App() {
             <h2>Hey there! What are we building?</h2>
             <p>
               Ask me anything about FastAPI, like routing, request bodies, dependencies,
-              middleware or testing. Every answer comes straight from the official docs.
+              middleware or testing. Every answer comes straight from the official docs,
+              with numbered citations you can click to check.
             </p>
             <div className="chips">
               {SUGGESTIONS.map((s, i) => (
@@ -649,11 +864,11 @@ function App() {
               <div className="msg-body"><div className="bubble">{m.text}</div></div>
             </div>
           ) : (
-            <AssistantMessage key={i} msg={m} onTyped={() => markTyped(i)} onTick={() => scrollToBottom(false)} />
+            <AssistantMessage key={i} msg={m} />
           )
         )}
 
-        {loading && <Thinking slow={slow} />}
+        {phase === "searching" && <Thinking slow={slow} />}
       </div>
 
       <div className="input-area">
@@ -662,19 +877,20 @@ function App() {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Ask about FastAPI..."
+            placeholder={messages.length ? "Ask a follow-up..." : "Ask about FastAPI..."}
             aria-label="Your question"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendQuestion(); } }}
-            disabled={loading}
+            disabled={busy}
+            maxLength={2000}
             autoFocus
           />
-          <button className="send-btn" aria-label="Send" onClick={() => sendQuestion()} disabled={loading || !input.trim()}>
+          <button className="send-btn" aria-label="Send" onClick={() => sendQuestion()} disabled={busy || !input.trim()}>
             <SendIcon />
           </button>
         </div>
-        <div className="hint">Enter to send · answers grounded in the docs</div>
+        <div className="hint">Enter to send · remembers the conversation · click [n] to see a source</div>
       </div>
     </React.Fragment>
   );

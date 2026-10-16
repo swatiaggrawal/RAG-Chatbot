@@ -11,13 +11,16 @@ before accepting requests. This makes the deployment self-contained:
 push the code + data/, and it builds its own search index on first boot.
 """
 
+import json
 from contextlib import asynccontextmanager
+from typing import Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
-from generate import answer_question
+from generate import answer_question, stream_answer
 from embed_store import get_index, embed_and_store
 
 
@@ -54,13 +57,34 @@ app.add_middleware(
 )
 
 
+class Message(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=8000)
+
+
 class ChatRequest(BaseModel):
-    question: str
+    # Length limits are a cheap guardrail: they cap how many tokens one
+    # request can spend and how much text can be stuffed into the prompt.
+    question: str = Field(min_length=1, max_length=2000)
+    # Recent conversation, sent by the client - the server keeps no
+    # session state, so it scales and survives restarts trivially.
+    history: list[Message] = Field(default_factory=list, max_length=20)
+
+
+class Source(BaseModel):
+    id: int
+    source: str
+    title: str
+    url: str
+    snippet: str
 
 
 class ChatResponse(BaseModel):
     answer: str
-    sources: list[str]
+    sources: list[Source]
+    cited: list[int]
+    search_query: str
+    timings: dict[str, int]
 
 
 @app.get("/health")
@@ -77,8 +101,44 @@ def chat(request: ChatRequest):
     (retrieve + generate), returns the answer and which source
     documents it was grounded in.
     """
-    result = answer_question(request.question)
-    return ChatResponse(answer=result["answer"], sources=result["sources"])
+    history = [m.model_dump() for m in request.history]
+    try:
+        result = answer_question(request.question, history)
+    except Exception as e:
+        # HTTPException (unlike an unhandled crash) goes through the CORS
+        # middleware, so the browser can actually read this error.
+        print(f"[chat] failed: {e!r}")
+        raise HTTPException(status_code=502, detail="The answer service failed. Please try again.")
+    return ChatResponse(**{k: result[k] for k in ChatResponse.model_fields})
+
+
+@app.post("/chat/stream")
+def chat_stream(request: ChatRequest):
+    """
+    Same pipeline as /chat, streamed as Server-Sent Events so the answer
+    appears as it's generated. Events, in order:
+      meta  - sources found + the (possibly rewritten) search query
+      token - a piece of answer text (many of these)
+      done  - which sources were cited + per-stage timings
+      error - if something failed midway
+    """
+    history = [m.model_dump() for m in request.history]
+
+    def events():
+        try:
+            for event, data in stream_answer(request.question, history):
+                yield f"event: {event}\ndata: {json.dumps(data)}\n\n"
+        except Exception as e:
+            print(f"[chat/stream] failed: {e!r}")
+            message = "The answer service failed. Please try again."
+            yield f"event: error\ndata: {json.dumps({'message': message})}\n\n"
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        # Stop proxies (e.g. Render's) from buffering the stream into one blob.
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 if __name__ == "__main__":
