@@ -16,6 +16,7 @@ document's natural structure instead of cutting mid-sentence.
 """
 
 import os
+import re
 import sys
 import unicodedata
 from pathlib import Path
@@ -27,6 +28,14 @@ from pypdf import PdfReader
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 DATA_DIR = Path(__file__).parent.parent / "data"
+
+DOCS_BASE_URL = "https://fastapi.tiangolo.com/"
+
+# FastAPI's markdown headings carry their URL anchor, e.g.
+# "## Use `CORSMiddleware` { #use-corsmiddleware }" - capturing these lets
+# every chunk cite the exact section of the official docs it came from.
+HEADING_RE = re.compile(r"^#{1,6} (.+?) \{ #([\w-]+) \}\s*$", re.MULTILINE)
+ANCHOR_RE = re.compile(r" ?\{ #[\w-]+ \}")
 
 CHUNK_SIZE = 800       # characters per chunk (~150-200 tokens) - tune this later
 CHUNK_OVERLAP = 100     # characters shared between consecutive chunks,
@@ -43,6 +52,27 @@ def normalize_text(text: str) -> str:
     and gives the embedding model cleaner, more standard text to work with.
     """
     return unicodedata.normalize("NFKC", text)
+
+
+def source_url(filename: str) -> str:
+    """
+    Maps a data/ filename to its page on fastapi.tiangolo.com, following
+    the naming convention used when the docs were copied in:
+    "tutorial-cors.md" -> /tutorial/cors/, "async.md" -> /async/.
+    """
+    stem = Path(filename).stem
+    if stem == "index":
+        return DOCS_BASE_URL
+    if stem == "tutorial-index":
+        return DOCS_BASE_URL + "tutorial/"
+    if stem.startswith("tutorial-"):
+        return DOCS_BASE_URL + "tutorial/" + stem[len("tutorial-"):] + "/"
+    return DOCS_BASE_URL + stem + "/"
+
+
+def strip_anchors(text: str) -> str:
+    """Removes the "{ #anchor }" markers - for display, not for embedding."""
+    return ANCHOR_RE.sub("", text)
 
 
 def load_documents() -> list[dict]:
@@ -129,12 +159,38 @@ def ingest_all() -> list[dict]:
     all_chunks = []
 
     for doc in documents:
-        chunks = recursive_chunk(doc["text"])
-        for i, chunk_text in enumerate(chunks):
+        text = doc["text"]
+        headings = [(m.start(), m.group(1), m.group(2)) for m in HEADING_RE.finditer(text)]
+        page_url = source_url(doc["source"])
+        search_from = 0
+
+        for i, chunk_text in enumerate(recursive_chunk(text)):
+            chunk_text = chunk_text.strip()
+
+            # Locate the chunk in the document (by its tail, since the head
+            # carries overlap from the previous chunk), then attribute it
+            # to the closest heading at or before its midpoint.
+            tail = chunk_text[-80:]
+            end = text.find(tail, search_from)
+            if end == -1:
+                end = text.find(tail)
+            if end != -1:
+                search_from = end
+                end += len(tail)
+            midpoint = max(0, end - len(chunk_text) // 2) if end != -1 else 0
+
+            title, anchor = "", ""
+            for pos, heading_title, heading_anchor in headings:
+                if pos > midpoint:
+                    break
+                title, anchor = heading_title, heading_anchor
+
             all_chunks.append({
                 "source": doc["source"],
                 "chunk_id": f"{doc['source']}::chunk_{i}",
-                "text": chunk_text.strip(),
+                "text": chunk_text,
+                "title": title.replace("`", "") or Path(doc["source"]).stem,
+                "url": page_url + (f"#{anchor}" if anchor else ""),
             })
 
     print(f"[OK] Ingested {len(documents)} document(s) into {len(all_chunks)} chunks.")

@@ -1,0 +1,53 @@
+name: RAG evals
+
+# Retrieval evals run on every push that touches the pipeline, the docs
+# or the eval set. The LLM-judged generation suite uses far more of the
+# free-tier token quota, so it only runs when triggered by hand.
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", "data/**", "evals/**", "requirements.txt"]
+  workflow_dispatch:
+    inputs:
+      generation:
+        description: "Also run the LLM-judged generation suite"
+        type: boolean
+        default: false
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Check API keys are configured
+        run: |
+          if [ -z "$PINECONE_API_KEY" ] || [ -z "$GROQ_API_KEY" ]; then
+            echo "::error::Add PINECONE_API_KEY and GROQ_API_KEY under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Run evals
+        run: |
+          if [ "${{ inputs.generation }}" = "true" ]; then
+            python evals/run_evals.py --retrieval --generation
+          else
+            python evals/run_evals.py --retrieval
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results
+          path: evals/results/
