@@ -61,7 +61,7 @@ useful for debugging retrieval quality without involving the LLM at all.
 |---|---|---|
 | Embeddings | Pinecone Inference (`llama-text-embed-v2`, 1024-dim) | Keeps the deployed backend lightweight — a local model (sentence-transformers + torch) needs 300-500MB+ RAM just to load, which exceeds free-tier hosting limits like Render's 512MB cap |
 | Vector store | Pinecone | Managed, serverless vector DB — no infra to provision or persist locally, scales past single-instance disk limits |
-| LLM | Groq (`llama-3.3-70b-versatile`) | Very fast inference with a free tier, so iterating on prompts costs nothing |
+| LLM | Groq (`openai/gpt-oss-120b`) | Very fast inference with a free tier, so iterating on prompts costs nothing |
 | Backend | FastAPI | Thin wrapper — no RAG logic lives here, just HTTP plumbing |
 | Frontend | React (CDN, no build step) | Full React component model without adding a Node/npm toolchain to the project |
 

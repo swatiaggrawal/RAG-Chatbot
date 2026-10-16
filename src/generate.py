@@ -23,8 +23,9 @@ load_dotenv()
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 # Groq's free tier covers this model; override via GROQ_MODEL in .env
-# (e.g. "llama-3.1-8b-instant" for higher free-tier rate limits).
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+# (e.g. "openai/gpt-oss-20b" for higher free-tier rate limits). Groq
+# retires models regularly - see https://console.groq.com/docs/deprecations
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
 SYSTEM_PROMPT = """You are a helpful assistant that answers questions using ONLY the context provided below.
 
@@ -66,7 +67,11 @@ def answer_question(question: str, top_k: int = 4) -> dict:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        max_tokens=1024,
+        # gpt-oss models reason before answering, and reasoning tokens
+        # count toward max_tokens - keep reasoning light and leave enough
+        # headroom that the visible answer can't get starved out.
+        reasoning_effort="low",
+        max_tokens=4096,
         temperature=0.2,  # low temperature keeps answers close to the context
     )
 
